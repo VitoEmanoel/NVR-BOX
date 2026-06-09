@@ -216,3 +216,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# NVR-BOX
+gravacoes/
+.agents/
+*.mp4
+*.avi
+*.mkv

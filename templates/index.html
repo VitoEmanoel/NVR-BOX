@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NVRBox | Painel de Controle</title>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <p><i class="ph ph-shield-check"></i> Monitoramento residencial seguro</p>
+        <h1>Painel de Segurança NVRBOX</h1>
+        <p>Visão centralizada das câmeras e status operacional.</p>
+    </header>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <i class="ph ph-hard-drive stat-icon"></i>
+            <div class="stat-info">
+                <h4>Uso do HD</h4>
+                <span>{{ disco.usado }} / {{ disco.total }}</span>
+                <div class="disk-percent">{{ disco.porcentagem }}% ocupado</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <i class="ph ph-activity stat-icon stat-icon-success"></i>
+            <div class="stat-info">
+                <h4>Online</h4>
+                <span>{{ online_count }}</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <i class="ph ph-warning stat-icon stat-icon-danger"></i>
+            <div class="stat-info">
+                <h4>Offline</h4>
+                <span>{{ total_cams - online_count }}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="add-section">
+        <h3><i class="ph ph-plus-circle"></i> Nova câmera</h3>
+        <form action="/adicionar_camera" method="POST" class="add-cam-form">
+            <input type="text" name="nome" placeholder="Nome da câmera" required>
+            <input type="text" name="rtsp_url" placeholder="URL RTSP (ex: rtsp://...)" required>
+            <input type="text" name="mac" placeholder="MAC (ex: aa:bb:cc:dd:ee:ff)" required>
+
+            <select name="protocolo">
+                <option value="udp">UDP (Padrão)</option>
+                <option value="tcp">TCP</option>
+            </select>
+            <button type="submit" class="btn-add">Adicionar</button>
+        </form>
+    </div>
+
+    <div class="camera-grid">
+        {% for cam in cameras %}
+        <div class="cam-card">
+            <div class="thumb-box">
+                {% if cam.online %}
+                <div class="badge badge-online"><i class="ph-fill ph-circle"></i> Online</div>
+                <img src="/live/{{ cam.nome }}" alt="Live">
+                {% else %}
+                <div class="badge badge-offline"><i class="ph-fill ph-warning"></i> Atenção</div>
+                <div class="offline-placeholder">
+                    <i class="ph ph-video-camera-slash offline-icon"></i>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="cam-info">
+                <h3>{{ cam.nome }}</h3>
+                <div class="cam-meta">
+                    <span><i class="ph ph-files"></i> {{ cam.qtd_videos }} vídeos</span>
+                    <span><i class="ph ph-broadcast"></i> RTSP Ativo</span>
+                </div>
+                <div class="cam-actions">
+                    <a href="/camera/{{ cam.nome }}" class="btn-view">Abrir Câmera</a>
+                    <a href="/apagar_camera/{{ cam.nome }}" class="btn-del" onclick="return confirm('Apagar esta câmera?')"><i class="ph ph-trash"></i></a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+</body>
+</html>

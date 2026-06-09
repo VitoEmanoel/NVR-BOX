@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ camera.nome }} | NVRBox</title>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/detalhe.css') }}">
+</head>
+<body>
+
+<div class="container">
+    <div class="header-nav">
+        <div>
+            <h1 class="camera-title">{{ camera.nome }}</h1>
+            <span class="camera-url">{{ camera.rtsp_url }}</span>
+        </div>
+        <a href="/" class="btn-back"><i class="ph ph-arrow-left"></i> Voltar ao painel</a>
+    </div>
+
+    <div class="main-layout">
+        <div class="player-section" id="player-container">
+            <div class="display-container" id="video-wrapper">
+                <button class="fs-button" onclick="toggleFullScreen()"><i class="ph ph-corners-out"></i></button>
+                <img src="/live/{{ camera.nome }}" class="video-player" id="live-feed">
+                <video id="player" class="video-player video-player-recorded" controls></video>
+            </div>
+            <button onclick="voltarAoVivo()" id="btn-live"><i class="ph ph-broadcast"></i> VOLTAR PARA O AO VIVO</button>
+        </div>
+
+        <div class="history-section">
+            <div class="history-header">
+                <h3>Gravações</h3>
+                <form class="filter-box">
+                    <input type="date" name="data" value="{{ data_filtro }}">
+                    <button type="submit" class="btn-filter"><i class="ph ph-magnifying-glass"></i></button>
+                </form>
+            </div>
+            <div class="video-list">
+                {% if videos %}
+                    {% for video in videos %}
+                    <div class="video-item">
+                        <div class="video-click-area" onclick="reproduzirVideo('{{ video }}')">
+                            <i class="ph ph-play-circle play-icon"></i>
+                            <span class="v-name">{{ video }}</span>
+                        </div>
+                        <a href="/download/{{ video }}" class="download-link"><i class="ph ph-download-simple"></i></a>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="empty-message">
+                        <i class="ph ph-ghost empty-icon"></i>
+                        Nenhuma gravação encontrada para esta data.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="info-grid">
+        <div class="info-card">
+            <h5>ESTADO</h5>
+            <span class="status-text {% if camera.online %}status-online{% else %}status-offline{% endif %}">
+                {% if camera.online %}ONLINE{% else %}OFFLINE{% endif %}
+            </span>
+        </div>
+        <div class="info-card">
+            <h5>TOTAL DE VÍDEOS</h5>
+            <span class="video-total">{{ videos|length }}</span>
+        </div>
+    </div>
+</div>
+
+<script>
+    const player = document.getElementById('player');
+    const liveFeed = document.getElementById('live-feed');
+    const btnLive = document.getElementById('btn-live');
+
+    function toggleFullScreen() {
+        const elem = document.getElementById('video-wrapper');
+        if (!document.fullscreenElement) {
+            elem.requestFullscreen().catch(err => {
+                alert(`Erro ao tentar entrar em tela cheia: ${err.message}`);
+            });
+        } else {
+            document.exitFullscreen();
+        }
+    }
+
+    function reproduzirVideo(filename) {
+        liveFeed.style.display = 'none';
+        player.style.display = 'block';
+        btnLive.style.display = 'flex';
+        player.src = '/video/' + filename;
+        player.play();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function voltarAoVivo() {
+        player.pause();
+        player.style.display = 'none';
+        btnLive.style.display = 'none';
+        liveFeed.style.display = 'block';
+    }
+</script>
+
+</body>
+</html>
