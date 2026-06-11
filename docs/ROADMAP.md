@@ -24,7 +24,7 @@ Nenhum item critico aberto no momento.
 
 - Tentar perfis RTSP conhecidos em sequencia quando o usuario nao souber o modelo.
 
-- Melhorar compatibilidade com dispositivos moveis.
+- Melhorar compatibilidade geral com dispositivos moveis.
 
 ## Melhorias futuras
 

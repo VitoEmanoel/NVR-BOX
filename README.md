@@ -24,6 +24,8 @@ Sem essas duas variaveis, o painel continua sem login para manter o uso local si
 - Segmentos `.mp4` fragmentados para preservar reproducao mesmo em paradas antes dos 10 minutos.
 - Historico de gravacoes por camera.
 - Filtro por data.
+- Reproducao de gravacoes no proprio painel.
+- Rota de reproducao compativel com navegador usando FFmpeg/WebM quando o `.mp4` original nao toca diretamente.
 - Download de videos.
 - Remocao de cameras por `POST`.
 - Mascaramento de senha RTSP na interface.
@@ -89,7 +91,9 @@ Ao trocar a memoria pelo painel, a captura reinicia os processos FFmpeg para gra
 
 O painel principal mostra as cameras cadastradas, o status online/offline e a quantidade de gravacoes por camera. Para ver o video ao vivo, abra a camera pelo botao `Abrir Camera`; o stream MJPEG e carregado na tela de detalhe.
 
-Na tela da camera, a lista `Gravacoes` mostra os arquivos encontrados no armazenamento ativo. Use o filtro de data para buscar um dia especifico e clique em uma gravacao valida para reproduzir no player. Arquivos antigos ou interrompidos antes desta versao podem aparecer como incompletos se nao puderem ser lidos pelo `ffprobe`.
+Na tela da camera, a lista `Gravacoes` mostra os arquivos encontrados no armazenamento ativo. Use o filtro de data para buscar um dia especifico e clique em uma gravacao valida para reproduzir no player. Ao abrir uma gravacao, o painel interrompe o stream ao vivo, mostra o player de video e usa uma rota compativel com navegador (`/video_compativel/<arquivo>`) para converter o trecho sob demanda para WebM quando necessario. O download continua entregando o arquivo `.mp4` original.
+
+Arquivos antigos ou interrompidos antes desta versao podem aparecer como incompletos se nao puderem ser lidos pelo `ffprobe`.
 
 ## Gravacoes curtas e queda de energia
 
@@ -153,4 +157,4 @@ bash -n iniciar_nvr.sh
 
 ## Proximas melhorias
 
-As tarefas pendentes ficam em `docs/ROADMAP.md`. Os proximos pontos principais sao melhorar mensagens operacionais, validar melhor armazenamento em Android/TV Box e preparar execucao por servico.
+As tarefas pendentes ficam em `docs/ROADMAP.md`. Os proximos pontos principais sao tratar melhor erros de JSON local, validar armazenamento em Android/TV Box e preparar execucao por servico.

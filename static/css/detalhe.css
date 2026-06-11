@@ -147,6 +147,21 @@ body {
     gap: 8px;
 }
 
+.player-status {
+    min-height: 20px;
+    margin-top: 8px;
+    color: var(--text-dim);
+    font-size: 0.78rem;
+}
+
+.player-status-info {
+    color: #93c5fd;
+}
+
+.player-status-error {
+    color: #fecaca;
+}
+
 .history-header {
     padding: 15px;
     border-bottom: 1px solid var(--border);
@@ -209,10 +224,22 @@ body {
     align-items: center;
     gap: 10px;
     min-width: 0;
+    background: transparent;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    padding: 0;
+    text-align: left;
 }
 
 .video-item-disabled .video-click-area {
     cursor: default;
+}
+
+button.video-click-area:focus-visible {
+    outline: 2px solid var(--blue-ui);
+    outline-offset: 3px;
+    border-radius: 6px;
 }
 
 .play-icon {

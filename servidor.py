@@ -167,6 +167,64 @@ def listar_videos_camera(caminho_videos, slug_fixo, data_filtro=""):
     return [obter_info_video(caminho_videos, nome) for nome in nomes]
 
 
+def obter_caminho_video_seguro(filename):
+    caminho_videos = os.path.abspath(get_caminho_videos())
+    caminho_video = os.path.abspath(os.path.join(caminho_videos, filename))
+    try:
+        dentro_da_pasta = os.path.commonpath([caminho_videos, caminho_video]) == caminho_videos
+    except ValueError:
+        dentro_da_pasta = False
+
+    if not dentro_da_pasta or not os.path.isfile(caminho_video):
+        return None
+
+    return caminho_video
+
+
+def gerar_video_compativel(caminho_video):
+    comando = [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel", "error",
+        "-fflags", "+genpts",
+        "-i", caminho_video,
+        "-map", "0:v:0",
+        "-an",
+        "-vf", "scale=1280:-2",
+        "-c:v", "libvpx",
+        "-deadline", "realtime",
+        "-cpu-used", "6",
+        "-b:v", "1400k",
+        "-f", "webm",
+        "pipe:1",
+    ]
+
+    processo = subprocess.Popen(
+        comando,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+
+    try:
+        while True:
+            chunk = processo.stdout.read(64 * 1024)
+            if not chunk:
+                break
+            yield chunk
+    except (BrokenPipeError, GeneratorExit, OSError):
+        pass
+    finally:
+        if processo.stdout:
+            processo.stdout.close()
+        if processo.poll() is None:
+            processo.terminate()
+            try:
+                processo.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                processo.kill()
+                processo.wait()
+
+
 def testar_rtsp_stream(url, transporte):
     comando = [
         "ffprobe",
@@ -389,6 +447,27 @@ def live_stream(slug):
 @app.route('/video/<filename>')
 def serve_video(filename):
     return send_from_directory(get_caminho_videos(), filename)
+
+
+@app.route('/video_compativel/<filename>')
+def serve_video_compativel(filename):
+    caminho_video = obter_caminho_video_seguro(filename)
+    if not caminho_video:
+        return "Video nao encontrado", 404
+    if not shutil.which("ffmpeg"):
+        return "FFmpeg nao encontrado no sistema.", 500
+
+    headers = {
+        "Cache-Control": "no-store",
+        "X-Accel-Buffering": "no",
+    }
+    return Response(
+        gerar_video_compativel(caminho_video),
+        mimetype="video/webm",
+        headers=headers,
+        direct_passthrough=True,
+    )
+
 
 @app.route('/adicionar_camera', methods=['POST'])
 def adicionar_camera():

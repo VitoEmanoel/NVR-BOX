@@ -23,15 +23,16 @@
             <div class="display-container" id="video-wrapper">
                 <button class="fs-button" onclick="toggleFullScreen()"><i class="ph ph-corners-out"></i></button>
                 {% if camera.online %}
-                <img src="{{ url_for('live_stream', slug=camera.slug) }}" class="video-player" id="live-feed" alt="Ao vivo">
+                <img src="{{ url_for('live_stream', slug=camera.slug) }}" data-live-src="{{ url_for('live_stream', slug=camera.slug) }}" class="video-player" id="live-feed" alt="Ao vivo">
                 {% else %}
                 <div class="video-player offline-live" id="live-feed">
                     <i class="ph ph-video-camera-slash"></i>
                     <span>Câmera offline. As gravações salvas continuam disponíveis.</span>
                 </div>
                 {% endif %}
-                <video id="player" class="video-player video-player-recorded" controls></video>
+                <video id="player" class="video-player video-player-recorded" controls playsinline preload="metadata"></video>
             </div>
+            <div class="player-status" id="player-status"></div>
             <button onclick="voltarAoVivo()" id="btn-live"><i class="ph ph-broadcast"></i> VOLTAR PARA O AO VIVO</button>
         </div>
 
@@ -48,11 +49,11 @@
                     {% for video in videos %}
                     <div class="video-item {% if not video.reproduzivel %}video-item-disabled{% endif %}">
                         {% if video.reproduzivel %}
-                        <div class="video-click-area" onclick="reproduzirVideo({{ video.nome|tojson }})">
+                        <button type="button" class="video-click-area js-play-video" data-video="{{ video.nome }}">
                             <i class="ph ph-play-circle play-icon"></i>
                             <span class="v-name">{{ video.nome }}</span>
                             <span class="v-meta">{{ video.duracao }} · {{ video.tamanho }}</span>
-                        </div>
+                        </button>
                         <a href="{{ url_for('download_video', filename=video.nome) }}" class="download-link"><i class="ph ph-download-simple"></i></a>
                         {% else %}
                         <div class="video-click-area">
@@ -83,7 +84,6 @@
         <div class="info-card">
             <h5>GRAVAÇÕES VÁLIDAS</h5>
             <span class="video-total">{{ videos_validos }} / {{ videos|length }}</span>
-            <p class="info-note">Vídeos curtos também são reproduzíveis quando foram fechados ou gravados em formato protegido.</p>
         </div>
     </div>
 </div>
@@ -92,6 +92,46 @@
     const player = document.getElementById('player');
     const liveFeed = document.getElementById('live-feed');
     const btnLive = document.getElementById('btn-live');
+    const playerStatus = document.getElementById('player-status');
+    const videoCompativelUrl = "{{ url_for('serve_video_compativel', filename='__FILENAME__') }}";
+    const liveOriginalSrc = liveFeed.dataset.liveSrc || liveFeed.getAttribute('src') || '';
+    let videoAtual = "";
+
+    function montarUrl(baseUrl, filename) {
+        return baseUrl.replace('__FILENAME__', encodeURIComponent(filename));
+    }
+
+    function atualizarStatus(texto, tipo = '') {
+        playerStatus.textContent = texto;
+        playerStatus.className = `player-status ${tipo}`;
+    }
+
+    function esconderAoVivo() {
+        liveFeed.style.display = 'none';
+        if (liveFeed.tagName === 'IMG') {
+            liveFeed.removeAttribute('src');
+        }
+    }
+
+    function mostrarAoVivo() {
+        if (liveFeed.tagName === 'IMG' && liveOriginalSrc) {
+            liveFeed.src = liveOriginalSrc;
+        }
+        liveFeed.style.display = liveFeed.classList.contains('offline-live') ? 'flex' : 'block';
+    }
+
+    function carregarVideo(src) {
+        player.pause();
+        player.src = src;
+        player.load();
+
+        const promessa = player.play();
+        if (promessa && typeof promessa.catch === 'function') {
+            promessa.catch(() => {
+                atualizarStatus('Gravação carregada. Use o botão play do player.', 'player-status-info');
+            });
+        }
+    }
 
     function toggleFullScreen() {
         const elem = document.getElementById('video-wrapper');
@@ -105,20 +145,46 @@
     }
 
     function reproduzirVideo(filename) {
-        liveFeed.style.display = 'none';
+        videoAtual = filename;
+        esconderAoVivo();
         player.style.display = 'block';
         btnLive.style.display = 'flex';
-        player.src = "{{ url_for('serve_video', filename='__FILENAME__') }}".replace('__FILENAME__', encodeURIComponent(filename));
-        player.play();
+        atualizarStatus('Preparando gravação para reprodução...', 'player-status-info');
+        carregarVideo(montarUrl(videoCompativelUrl, filename));
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     function voltarAoVivo() {
+        videoAtual = "";
         player.pause();
+        player.removeAttribute('src');
+        player.load();
         player.style.display = 'none';
         btnLive.style.display = 'none';
-        liveFeed.style.display = 'block';
+        atualizarStatus('');
+        mostrarAoVivo();
     }
+
+    player.addEventListener('loadedmetadata', () => {
+        atualizarStatus('Gravação pronta.', 'player-status-info');
+    });
+
+    player.addEventListener('playing', () => {
+        atualizarStatus('');
+    });
+
+    player.addEventListener('error', () => {
+        if (!videoAtual) {
+            return;
+        }
+        atualizarStatus('Não foi possível reproduzir esta gravação no navegador.', 'player-status-error');
+    });
+
+    document.querySelectorAll('.js-play-video').forEach((botao) => {
+        botao.addEventListener('click', () => {
+            reproduzirVideo(botao.dataset.video);
+        });
+    });
 </script>
 
 </body>

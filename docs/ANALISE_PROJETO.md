@@ -2,9 +2,9 @@
 
 ## Visao geral
 
-O NVRBox e um prototipo de NVR residencial com arquitetura simples e funcional. O sistema usa Flask para o painel web, FFmpeg para captura RTSP e arquivos `.mp4` segmentados e fragmentados para armazenar as gravacoes.
+O NVRBox e um prototipo de NVR residencial com arquitetura simples e funcional. O sistema usa Flask para o painel web, FFmpeg para captura RTSP e arquivos `.mp4` segmentados e fragmentados para armazenar as gravacoes. A tela de detalhe tambem usa FFmpeg para entregar uma versao WebM compativel quando o navegador nao consegue tocar o `.mp4` original diretamente.
 
-A proposta atual e adequada para uso local, estudo e demonstracao de TCC. O projeto ja recebeu melhorias importantes de confiabilidade e usabilidade, incluindo configuracao de armazenamento pelo painel, cadastro simplificado de cameras, teste RTSP antes de salvar novas cameras, mascaramento de RTSP na interface, separacao de HTML/CSS, slugs seguros, escrita atomica de JSON, MP4 fragmentado para gravacoes curtas, validacao de arquivos gravados, autenticacao opcional, rotacao simples de logs do FFmpeg e arquivo local de cameras fora do Git. As proximas evolucoes mais importantes sao melhorar mensagens operacionais, validar melhor Android/TV Box e preparar operacao como servico. As tarefas acionaveis ficam centralizadas em `docs/ROADMAP.md`.
+A proposta atual e adequada para uso local, estudo e demonstracao de TCC. O projeto ja recebeu melhorias importantes de confiabilidade e usabilidade, incluindo configuracao de armazenamento pelo painel, cadastro simplificado de cameras, teste RTSP antes de salvar novas cameras, mascaramento de RTSP na interface, separacao de HTML/CSS, slugs seguros, escrita atomica de JSON, MP4 fragmentado para gravacoes curtas, validacao de arquivos gravados, reproducao de gravacoes no painel com fallback compativel para navegador, autenticacao opcional, rotacao simples de logs do FFmpeg e arquivo local de cameras fora do Git. As proximas evolucoes mais importantes sao tratar melhor erros de JSON local, validar melhor Android/TV Box e preparar operacao como servico. As tarefas acionaveis ficam centralizadas em `docs/ROADMAP.md`.
 
 ## Arquitetura atual
 
@@ -34,7 +34,9 @@ Fluxo principal:
 5. O FFmpeg grava segmentos `.mp4` na pasta escolhida.
 6. Se o armazenamento for alterado no painel, `captura.py` reinicia os FFmpeg para usar o novo caminho.
 7. `servidor.py` lista cameras, status e arquivos gravados no armazenamento ativo.
-8. `limpeza.py` monitora o uso do armazenamento ativo e remove videos antigos quando necessario.
+8. Na tela de detalhe, o clique em uma gravacao interrompe o live view e abre o player gravado.
+9. Se o `.mp4` original nao for adequado para o navegador, `/video_compativel/<arquivo>` entrega WebM gerado sob demanda pelo FFmpeg.
+10. `limpeza.py` monitora o uso do armazenamento ativo e remove videos antigos quando necessario.
 
 ## Estado atual
 
@@ -46,11 +48,14 @@ O projeto ja entrega as funcoes centrais de um painel NVR simples:
 - live view via MJPEG;
 - historico de gravacoes;
 - filtro por data;
+- reproducao de gravacoes dentro do painel;
+- fallback WebM sob demanda para navegadores que nao tocam o `.mp4` original da camera;
 - download de videos;
 - limpeza automatica de gravacoes antigas;
 - configuracao central do caminho de gravacoes, com selecao de armazenamento pelo painel;
 - MP4 fragmentado para preservar trechos curtos em paradas antes do fechamento normal;
 - separacao visual entre gravacoes reproduziveis e arquivos incompletos no historico;
+- botoes reais de reproducao no historico, com troca explicita entre ao vivo e gravacao;
 - teste real de RTSP com `ffprobe` antes de salvar novas cameras;
 - remocao de cameras por `POST`;
 - mascaramento de credenciais RTSP na interface;
@@ -125,7 +130,11 @@ Ainda existem alguns pontos onde o tratamento de erro pode ser refinado, mas os 
 
 ### Reproducao de gravacoes
 
-A tela de detalhe da camera usa `ffprobe` para validar cada `.mp4` antes de liberar reproducao. Arquivos reproduziveis exibem duracao e tamanho; arquivos incompletos ou invalidos aparecem separados para nao confundir falha de gravacao antiga com falha do player. Novas gravacoes usam MP4 fragmentado para preservar trechos interrompidos antes dos 10 minutos.
+A tela de detalhe da camera usa `ffprobe` para validar cada `.mp4` antes de liberar reproducao. Arquivos reproduziveis exibem duracao e tamanho; arquivos incompletos ou invalidos aparecem separados para nao confundir falha de gravacao antiga com falha do player.
+
+Ao clicar em uma gravacao valida, a interface interrompe o stream MJPEG ao vivo, remove o `src` do live view, mostra o elemento `<video>` e carrega a rota `/video_compativel/<arquivo>`. Essa rota usa FFmpeg para converter sob demanda o video para WebM em largura maxima de 1280px, sem alterar o arquivo `.mp4` original usado pelo download. Essa abordagem resolve casos em que o player externo abre o arquivo, mas o navegador nao aceita diretamente o codec, nivel, resolucao ou formato emitido pela camera.
+
+Novas gravacoes continuam usando MP4 fragmentado para preservar trechos interrompidos antes dos 10 minutos.
 
 ### Limpeza de gravacoes
 
@@ -154,7 +163,7 @@ test ! -f cameras.local.json || python3 -m json.tool cameras.local.json
 bash -n iniciar_nvr.sh
 ```
 
-Essas verificacoes cobrem sintaxe Python, validade do JSON e sintaxe do script shell. Elas nao substituem testes funcionais com cameras reais, gravacao em disco, reproducao pelo painel e limpeza automatica.
+Essas verificacoes cobrem sintaxe Python, validade do JSON e sintaxe do script shell. Elas nao substituem testes funcionais com cameras reais, gravacao em disco, reproducao pelo painel, rota compativel WebM e limpeza automatica.
 
 Tambem e util validar rotas Flask com `test_client` para cobrir renderizacao da home, detalhe de camera, validacao de formulario e download inexistente sem iniciar o FFmpeg.
 
