@@ -25,6 +25,23 @@
                 <div class="disk-percent">{{ disco.porcentagem }}% ocupado</div>
             </div>
         </div>
+        <div class="stat-card storage-card">
+            <i class="ph ph-folder-open stat-icon"></i>
+            <div class="stat-info storage-info">
+                <h4>Armazenamento</h4>
+                <form action="{{ url_for('configurar_armazenamento') }}" method="POST" class="storage-form">
+                    <select name="caminho_videos" title="{{ caminho_videos }}">
+                        {% for armazenamento in armazenamentos %}
+                        <option value="{{ armazenamento.caminho }}" {% if armazenamento.selecionado %}selected{% endif %}>
+                            {{ armazenamento.nome }} - {{ armazenamento.livre }} livres
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit">Usar</button>
+                </form>
+                <div class="storage-path" title="{{ caminho_videos }}">{{ caminho_videos }}</div>
+            </div>
+        </div>
         <div class="stat-card">
             <i class="ph ph-activity stat-icon stat-icon-success"></i>
             <div class="stat-info">
@@ -43,16 +60,37 @@
 
     <div class="add-section">
         <h3><i class="ph ph-plus-circle"></i> Nova câmera</h3>
-        <form action="/adicionar_camera" method="POST" class="add-cam-form">
-            <input type="text" name="nome" placeholder="Nome da câmera" required>
-            <input type="text" name="rtsp_url" placeholder="URL RTSP (ex: rtsp://...)" required>
-            <input type="text" name="mac" placeholder="MAC (ex: aa:bb:cc:dd:ee:ff)" required>
-
-            <select name="protocolo">
-                <option value="udp">UDP (Padrão)</option>
-                <option value="tcp">TCP</option>
+        {% if mensagem_erro %}
+        <div class="alert alert-error">{{ mensagem_erro }}</div>
+        {% endif %}
+        {% if mensagem_sucesso %}
+        <div class="alert alert-success">{{ mensagem_sucesso }}</div>
+        {% endif %}
+        <form action="{{ url_for('adicionar_camera') }}" method="POST" class="add-cam-form">
+            <input type="text" name="nome" placeholder="Nome da câmera" value="{{ form_data.get('nome', '') }}" required>
+            <input type="text" name="ip" placeholder="IP da câmera" value="{{ form_data.get('ip', '') }}" required>
+            <input type="password" name="senha" placeholder="Senha da câmera" required>
+            <select name="perfil" id="perfil-rtsp">
+                {% for chave, perfil in perfis_rtsp.items() %}
+                <option value="{{ chave }}" {% if form_data.get('perfil', 'onvif1') == chave %}selected{% endif %}>{{ perfil.nome }}</option>
+                {% endfor %}
+                <option value="manual" {% if form_data.get('perfil') == 'manual' %}selected{% endif %}>Manual</option>
             </select>
             <button type="submit" class="btn-add">Adicionar</button>
+
+            <details class="advanced-options">
+                <summary>Opções avançadas</summary>
+                <div class="advanced-grid">
+                    <input type="text" name="usuario" value="{{ form_data.get('usuario', 'admin') }}" placeholder="Usuário">
+                    <input type="number" name="porta" value="{{ form_data.get('porta', '554') }}" min="1" max="65535" placeholder="Porta RTSP">
+                    <input type="text" name="mac" value="{{ form_data.get('mac', '') }}" placeholder="MAC">
+                    <select name="protocolo">
+                        <option value="udp" {% if form_data.get('protocolo', 'udp') == 'udp' %}selected{% endif %}>UDP</option>
+                        <option value="tcp" {% if form_data.get('protocolo') == 'tcp' %}selected{% endif %}>TCP</option>
+                    </select>
+                    <input type="text" name="caminho_manual" id="caminho-manual" class="manual-path" value="{{ form_data.get('caminho_manual', '') }}" placeholder="Caminho RTSP">
+                </div>
+            </details>
         </form>
     </div>
 
@@ -62,11 +100,15 @@
             <div class="thumb-box">
                 {% if cam.online %}
                 <div class="badge badge-online"><i class="ph-fill ph-circle"></i> Online</div>
-                <img src="/live/{{ cam.nome }}" alt="Live">
+                <div class="live-placeholder">
+                    <i class="ph ph-video-camera live-icon"></i>
+                    <span>Ao vivo disponível</span>
+                </div>
                 {% else %}
                 <div class="badge badge-offline"><i class="ph-fill ph-warning"></i> Atenção</div>
                 <div class="offline-placeholder">
                     <i class="ph ph-video-camera-slash offline-icon"></i>
+                    <span>Câmera offline</span>
                 </div>
                 {% endif %}
             </div>
@@ -75,17 +117,31 @@
                 <h3>{{ cam.nome }}</h3>
                 <div class="cam-meta">
                     <span><i class="ph ph-files"></i> {{ cam.qtd_videos }} vídeos</span>
-                    <span><i class="ph ph-broadcast"></i> RTSP Ativo</span>
+                    <span><i class="ph ph-broadcast"></i> {% if cam.online %}RTSP ativo{% else %}Sem resposta{% endif %}</span>
                 </div>
                 <div class="cam-actions">
-                    <a href="/camera/{{ cam.nome }}" class="btn-view">Abrir Câmera</a>
-                    <a href="/apagar_camera/{{ cam.nome }}" class="btn-del" onclick="return confirm('Apagar esta câmera?')"><i class="ph ph-trash"></i></a>
+                    <a href="{{ url_for('detalhe_camera', slug=cam.slug) }}" class="btn-view">Abrir Câmera</a>
+                    <form action="{{ url_for('apagar_camera', slug=cam.slug) }}" method="POST" class="delete-form" onsubmit="return confirm('Apagar esta câmera?')">
+                        <button type="submit" class="btn-del"><i class="ph ph-trash"></i></button>
+                    </form>
                 </div>
             </div>
         </div>
         {% endfor %}
     </div>
 </div>
+
+<script>
+    const perfilRtsp = document.getElementById('perfil-rtsp');
+    const caminhoManual = document.getElementById('caminho-manual');
+
+    function alternarCaminhoManual() {
+        caminhoManual.style.display = perfilRtsp.value === 'manual' ? 'block' : 'none';
+    }
+
+    perfilRtsp.addEventListener('change', alternarCaminhoManual);
+    alternarCaminhoManual();
+</script>
 
 </body>
 </html>

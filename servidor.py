@@ -1,71 +1,274 @@
 
 from flask import Flask, render_template, send_from_directory, request, redirect, url_for, Response
 import os
-import json
+import re
 import subprocess
 import shutil
 import socket
+from secrets import compare_digest
+from urllib.parse import urlparse
+
+from config import (
+    AUTH_ATIVA,
+    AUTH_SENHA,
+    AUTH_USUARIO,
+    RTSP_PERFIS,
+    RTSP_TRANSPORTE_PADRAO,
+    TESTAR_RTSP_CADASTRO,
+    TIMEOUT_TESTE_RTSP,
+    carregar_cameras,
+    construir_rtsp_url,
+    definir_armazenamento,
+    get_caminho_videos,
+    garantir_diretorios,
+    gerar_slug,
+    listar_armazenamentos,
+    mascarar_rtsp,
+    salvar_cameras,
+    slug_camera,
+)
 
 app = Flask(__name__)
 
-def encontrar_armazenamento():
-    DIRETORIO_BASE = os.path.dirname(os.path.abspath(__file__))
-    caminho_final = os.path.join(DIRETORIO_BASE, 'gravacoes')
-    return caminho_final
+garantir_diretorios()
+print(f"Sistema rodando! Gravando em: {get_caminho_videos()}")
 
-CAMINHO_VIDEOS = encontrar_armazenamento()
-DIRETORIO_PROJETO = os.path.dirname(os.path.abspath(__file__))
-ARQUIVO_CAMERAS = os.path.join(DIRETORIO_PROJETO, 'cameras.json')
+MAC_REGEX = re.compile(r"^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$")
 
-os.makedirs(CAMINHO_VIDEOS, exist_ok=True)
-print(f"Sistema rodando! Gravando em: {CAMINHO_VIDEOS}")
 
-def get_disk_info():
+@app.before_request
+def exigir_autenticacao():
+    if not AUTH_ATIVA or request.endpoint == "static":
+        return None
+
+    auth = request.authorization
+    usuario_ok = auth and compare_digest(auth.username or "", AUTH_USUARIO)
+    senha_ok = auth and compare_digest(auth.password or "", AUTH_SENHA)
+    if usuario_ok and senha_ok:
+        return None
+
+    return Response(
+        "Autenticacao necessaria.",
+        401,
+        {"WWW-Authenticate": 'Basic realm="NVRBox"'},
+    )
+
+
+def buscar_camera_por_slug(cameras, slug):
+    slug_normalizado = gerar_slug(slug)
+    return next((camera for camera in cameras if slug_camera(camera) == slug_normalizado), None)
+
+def get_disk_info(caminho_videos):
     """Calcula o uso do HD externo de forma leve """
     try:
-        total, usado, livre = shutil.disk_usage(CAMINHO_VIDEOS)
+        total, usado, livre = shutil.disk_usage(caminho_videos)
         return {
             "total": f"{total / (1024**3):.1f} GB",
             "usado": f"{usado / (1024**3):.1f} GB",
             "porcentagem": int((usado / total) * 100)
         }
-    except:
+    except OSError:
         return {"total": "0", "usado": "0", "porcentagem": 0}
 
 def verificar_online(url):
-    """Tenta conexÃ£o rÃ¡pida com a porta RTSP (554) para checar se a cÃ¢mera estÃ¡ viva"""
+    """Tenta conexao rapida com a porta RTSP para checar se a camera esta viva."""
     try:
-        ip = url.split('@')[1].split(':')[0]
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(1.0)
-        s.connect((ip, 554))
-        s.close()
+        parsed = urlparse(url)
+        host = parsed.hostname
+        porta = parsed.port or 554
+        if not host:
+            return False
+        with socket.create_connection((host, porta), timeout=1.0):
+            pass
         return True
-    except:
+    except OSError:
         return False
 
 def contar_arquivos(slug_camera):
     try:
-        arquivos = [f for f in os.listdir(CAMINHO_VIDEOS) if f.startswith(slug_camera) and f.endswith('.mp4')]
+        caminho_videos = get_caminho_videos()
+        arquivos = [f for f in os.listdir(caminho_videos) if f.startswith(slug_camera) and f.endswith('.mp4')]
         return len(arquivos)
-    except:
+    except OSError:
         return 0
 
-def carregar_cameras():
-    if not os.path.exists(ARQUIVO_CAMERAS): return []
-    with open(ARQUIVO_CAMERAS, 'r') as f: return json.load(f)
 
-def salvar_cameras(cameras):
-    with open(ARQUIVO_CAMERAS, 'w') as f: json.dump(cameras, f, indent=4)
+def formatar_tamanho(bytes_arquivo):
+    if bytes_arquivo >= 1024 ** 3:
+        return f"{bytes_arquivo / (1024 ** 3):.1f} GB"
+    return f"{bytes_arquivo / (1024 ** 2):.1f} MB"
 
-def gerar_frames(rtsp_url):
-    os.system("pkill -9 -f image2pipe")
+
+def formatar_duracao(segundos):
+    segundos = int(float(segundos))
+    horas, resto = divmod(segundos, 3600)
+    minutos, segundos = divmod(resto, 60)
+    if horas:
+        return f"{horas:02d}:{minutos:02d}:{segundos:02d}"
+    return f"{minutos:02d}:{segundos:02d}"
+
+
+def obter_info_video(caminho_videos, nome_arquivo):
+    caminho = os.path.join(caminho_videos, nome_arquivo)
+    try:
+        tamanho = os.path.getsize(caminho)
+    except OSError:
+        tamanho = 0
+
+    info = {
+        "nome": nome_arquivo,
+        "tamanho": formatar_tamanho(tamanho),
+        "duracao": "",
+        "reproduzivel": False,
+    }
+
+    try:
+        resultado = subprocess.run(
+            [
+                "ffprobe",
+                "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=nw=1:nk=1",
+                caminho,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=4,
+            check=False,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return info
+
+    duracao = resultado.stdout.strip()
+    if resultado.returncode == 0 and duracao and duracao != "N/A":
+        try:
+            info["duracao"] = formatar_duracao(duracao)
+            info["reproduzivel"] = True
+        except ValueError:
+            pass
+
+    return info
+
+
+def listar_videos_camera(caminho_videos, slug_fixo, data_filtro=""):
+    try:
+        nomes = [
+            f for f in os.listdir(caminho_videos)
+            if f.startswith(slug_fixo) and f.endswith('.mp4')
+        ]
+    except OSError:
+        return []
+
+    if data_filtro:
+        nomes = [f for f in nomes if data_filtro in f]
+
+    nomes.sort(reverse=True)
+    return [obter_info_video(caminho_videos, nome) for nome in nomes]
+
+
+def testar_rtsp_stream(url, transporte):
     comando = [
-        'ffmpeg', '-rtsp_transport', 'udp', '-i', rtsp_url,
+        "ffprobe",
+        "-v", "error",
+        "-rtsp_transport", transporte,
+        "-select_streams", "v:0",
+        "-show_entries", "stream=codec_type",
+        "-of", "csv=p=0",
+        url,
+    ]
+    try:
+        resultado = subprocess.run(
+            comando,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=TIMEOUT_TESTE_RTSP,
+            check=False,
+        )
+    except FileNotFoundError:
+        return False, "ffprobe nao encontrado. Instale o FFmpeg para testar a camera."
+    except subprocess.TimeoutExpired:
+        return False, "Nao foi possivel confirmar o RTSP dentro do tempo limite."
+
+    if resultado.returncode != 0 or "video" not in resultado.stdout:
+        return False, "Nao foi possivel abrir video nesse RTSP. Confira IP, senha, perfil e protocolo."
+
+    return True, None
+
+def validar_nova_camera(dados, cameras):
+    ip = (dados.get("ip") or "").strip()
+    senha = (dados.get("senha") or "").strip()
+    usuario = (dados.get("usuario") or "admin").strip()
+    porta = (dados.get("porta") or "554").strip()
+    perfil = (dados.get("perfil") or "onvif1").strip()
+    caminho_manual = (dados.get("caminho_manual") or "").strip()
+    nome = (dados.get("nome") or f"Camera {ip}").strip()
+    mac = (dados.get("mac") or "").strip()
+    protocolo = (dados.get("protocolo") or RTSP_TRANSPORTE_PADRAO).strip().lower()
+
+    if not nome:
+        return None, "Nome da camera e obrigatorio."
+    if not ip:
+        return None, "IP da camera e obrigatorio."
+    if not senha:
+        return None, "Senha da camera e obrigatoria."
+    if not usuario:
+        return None, "Usuario da camera e obrigatorio."
+    if not porta.isdigit() or not 1 <= int(porta) <= 65535:
+        return None, "Porta RTSP invalida."
+    if perfil != "manual" and perfil not in RTSP_PERFIS:
+        return None, "Perfil RTSP invalido."
+    if perfil == "manual" and not caminho_manual:
+        return None, "Caminho RTSP manual e obrigatorio."
+    if protocolo not in {"udp", "tcp"}:
+        return None, "Protocolo invalido."
+    if mac and not MAC_REGEX.match(mac):
+        return None, "MAC invalido. Use o formato aa:bb:cc:dd:ee:ff."
+
+    rtsp_url = construir_rtsp_url(ip, senha, usuario, perfil, porta, caminho_manual)
+
+    parsed = urlparse(rtsp_url)
+    if parsed.scheme != "rtsp" or not parsed.hostname:
+        return None, "URL RTSP invalida."
+
+    slug = gerar_slug(nome)
+    for camera in cameras:
+        if camera.get("nome", "").strip().lower() == nome.lower():
+            return None, "Ja existe uma camera com esse nome."
+        if slug_camera(camera) == slug:
+            return None, "Ja existe uma camera com esse slug."
+
+    if TESTAR_RTSP_CADASTRO:
+        ok, erro = testar_rtsp_stream(rtsp_url, protocolo)
+        if not ok:
+            return None, erro
+
+    return {
+        "nome": nome,
+        "rtsp_url": rtsp_url,
+        "mac": mac.lower(),
+        "slug": slug,
+        "protocolo": protocolo,
+        "usuario": usuario,
+        "ip": ip,
+        "porta": int(porta),
+        "perfil": perfil,
+    }, None
+
+def gerar_frames(camera):
+    rtsp_url = camera['rtsp_url']
+    transporte = camera.get('protocolo', RTSP_TRANSPORTE_PADRAO)
+    comando = [
+        'ffmpeg', '-rtsp_transport', transporte, '-i', rtsp_url,
         '-f', 'image2pipe', '-vcodec', 'mjpeg', '-q', '5',
         '-vf', 'scale=640:-1', '-'
     ]
-    processo = subprocess.Popen(comando, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    try:
+        processo = subprocess.Popen(comando, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    except OSError:
+        return
+
     buffer = b""
     try:
         while True:
@@ -81,30 +284,35 @@ def gerar_frames(rtsp_url):
                     buffer = buffer[b+2:]
                     yield (b'--frame\r\nContent-Type: image/jpeg\r\n'
                            b'Content-Length: ' + str(len(jpg)).encode() + b'\r\n\r\n' + jpg + b'\r\n')
-    except: pass
+    except (BrokenPipeError, OSError):
+        pass
     finally:
-        processo.kill()
+        if processo.poll() is None:
+            processo.kill()
         processo.wait()
 
 
-@app.route('/')
-def index():
+def montar_contexto_index():
+    caminho_videos = get_caminho_videos()
+    garantir_diretorios(caminho_videos)
     cameras = carregar_cameras()
     total_cams = len(cameras)
     online_count = 0
     for camera in cameras:
         camera['online'] = verificar_online(camera['rtsp_url'])
+        camera['rtsp_mascarado'] = mascarar_rtsp(camera['rtsp_url'])
         if camera['online']:
             online_count += 1
-        slug_fixo = camera.get('slug', camera['nome'].replace(" ", "_"))
+        slug_fixo = slug_camera(camera)
+        camera['slug'] = slug_fixo
         try:
-            videos = [f for f in os.listdir(CAMINHO_VIDEOS) if f.startswith(slug_fixo) and f.endswith('.mp4')]
+            videos = [f for f in os.listdir(caminho_videos) if f.startswith(slug_fixo) and f.endswith('.mp4')]
             camera['qtd_videos'] = len(videos)
         except Exception:
             camera['qtd_videos'] = 0
 
     try:
-        uso = shutil.disk_usage(CAMINHO_VIDEOS)
+        uso = shutil.disk_usage(caminho_videos)
         disco = {
             'usado': f"{(uso.used / (1024**3)):.1f} GB",
             'total': f"{(uso.total / (1024**3)):.1f} GB",
@@ -114,12 +322,40 @@ def index():
     except Exception:
         disco = {'usado': '0 GB', 'total': '0 GB', 'livre': '0 GB', 'porcentagem': 0}
 
-    return render_template('index.html', cameras=cameras, total_cams=total_cams, online_count=online_count, disco=disco)
+    return {
+        "cameras": cameras,
+        "total_cams": total_cams,
+        "online_count": online_count,
+        "disco": disco,
+        "perfis_rtsp": RTSP_PERFIS,
+        "caminho_videos": caminho_videos,
+        "armazenamentos": listar_armazenamentos(),
+    }
 
-@app.route('/camera/<nome>')
-def detalhe_camera(nome):
+
+def renderizar_index(mensagem_erro=None, mensagem_sucesso=None, form_data=None, status=200):
+    contexto = montar_contexto_index()
+    contexto.update({
+        "mensagem_erro": mensagem_erro,
+        "mensagem_sucesso": mensagem_sucesso,
+        "form_data": form_data or {},
+    })
+    return render_template('index.html', **contexto), status
+
+
+@app.route('/')
+def index():
+    return renderizar_index(
+        mensagem_erro=request.args.get("erro"),
+        mensagem_sucesso=request.args.get("sucesso"),
+    )
+
+
+@app.route('/camera/<slug>')
+def detalhe_camera(slug):
+    caminho_videos = get_caminho_videos()
     cameras = carregar_cameras()
-    camera = next((c for c in cameras if c['nome'].lower() == nome.lower()), None)
+    camera = buscar_camera_por_slug(cameras, slug)
     if not camera:
         return redirect(url_for('index'))
 
@@ -127,57 +363,69 @@ def detalhe_camera(nome):
 
     esta_viva = verificar_online(camera['rtsp_url'])
     camera['online'] = esta_viva 
-    slug_fixo = camera.get('slug', camera['nome'].replace(" ", "_"))
-    try:
-        ficheiros = [f for f in os.listdir(CAMINHO_VIDEOS) if f.startswith(slug_fixo) and f.endswith('.mp4')]
-        if data_filtro:
-            ficheiros = [f for f in ficheiros if data_filtro in f]
-        ficheiros.sort(reverse=True)
-    except:
-        ficheiros = []
+    camera['rtsp_mascarado'] = mascarar_rtsp(camera['rtsp_url'])
+    slug_fixo = slug_camera(camera)
+    camera['slug'] = slug_fixo
+    videos = listar_videos_camera(caminho_videos, slug_fixo, data_filtro)
+    videos_validos = sum(1 for video in videos if video["reproduzivel"])
 
-    return render_template('detalhe.html', camera=camera, videos=ficheiros, data_filtro=data_filtro)
+    return render_template(
+        'detalhe.html',
+        camera=camera,
+        videos=videos,
+        videos_validos=videos_validos,
+        data_filtro=data_filtro,
+    )
 
-@app.route('/live/<nome>')
-def live_stream(nome):
+
+@app.route('/live/<slug>')
+def live_stream(slug):
     cameras = carregar_cameras()
-    camera = next((c for c in cameras if c['nome'].lower() == nome.lower()), None)
+    camera = buscar_camera_por_slug(cameras, slug)
     if camera:
-        return Response(gerar_frames(camera['rtsp_url']), mimetype='multipart/x-mixed-replace; boundary=frame')
-    return "CÃ¢mara nÃ£o encontrada", 404
+        return Response(gerar_frames(camera), mimetype='multipart/x-mixed-replace; boundary=frame')
+    return "Camera nao encontrada", 404
 
 @app.route('/video/<filename>')
 def serve_video(filename):
-    return send_from_directory(CAMINHO_VIDEOS, filename)
+    return send_from_directory(get_caminho_videos(), filename)
 
 @app.route('/adicionar_camera', methods=['POST'])
 def adicionar_camera():
-    nome = request.form.get('nome')
-    rtsp_url = request.form.get('rtsp_url')
-    mac = request.form.get('mac')
-
     cameras = carregar_cameras()
-    nova_camera = {
-        "nome": nome,
-        "rtsp_url": rtsp_url,
-        "mac": mac,
-        "slug": nome.lower().replace(" ", "_")
-    }
+    nova_camera, erro = validar_nova_camera(request.form, cameras)
+    if erro:
+        return renderizar_index(
+            mensagem_erro=erro,
+            form_data=request.form,
+            status=400,
+        )
+
     cameras.append(nova_camera)
     salvar_cameras(cameras)
-    return redirect('/')
+    return redirect(url_for('index', sucesso="Camera adicionada."))
 
-@app.route('/apagar_camera/<nome>')
-def apagar_camera(nome):
+
+@app.route('/apagar_camera/<slug>', methods=['POST'])
+def apagar_camera(slug):
     cams = carregar_cameras()
-    cams = [c for c in cams if c['nome'].lower() != nome.lower()]
+    slug_normalizado = gerar_slug(slug)
+    cams = [c for c in cams if slug_camera(c) != slug_normalizado]
     salvar_cameras(cams)
-    os.system("systemctl restart captura-camera.service > /dev/null 2>&1")
-    return redirect(url_for('index'))
+    return redirect(url_for('index', sucesso="Camera removida."))
+
+@app.route('/configurar_armazenamento', methods=['POST'])
+def configurar_armazenamento():
+    caminho = request.form.get('caminho_videos', '')
+    ok, erro = definir_armazenamento(caminho)
+    if not ok:
+        return renderizar_index(mensagem_erro=erro, status=400)
+    garantir_diretorios(get_caminho_videos())
+    return redirect(url_for('index', sucesso="Armazenamento atualizado."))
 
 @app.route('/download/<filename>')
 def download_video(filename):
-    return send_from_directory(CAMINHO_VIDEOS, filename, as_attachment=True)
+    return send_from_directory(get_caminho_videos(), filename, as_attachment=True)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, threaded=True)

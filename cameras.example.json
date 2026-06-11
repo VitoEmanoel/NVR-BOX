@@ -1,0 +1,13 @@
+[
+    {
+        "nome": "Garagem",
+        "rtsp_url": "rtsp://admin:SENHA_AQUI@192.168.0.10:554/onvif1",
+        "mac": "00:11:22:33:44:55",
+        "slug": "garagem",
+        "protocolo": "udp",
+        "usuario": "admin",
+        "ip": "192.168.0.10",
+        "porta": 554,
+        "perfil": "onvif1"
+    }
+]

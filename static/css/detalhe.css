@@ -97,6 +97,23 @@ body {
     object-fit: contain;
 }
 
+.offline-live {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 20px;
+    color: var(--text-dim);
+    text-align: center;
+    background: #020617;
+}
+
+.offline-live i {
+    color: var(--danger);
+    font-size: 3rem;
+}
+
 .video-player-recorded {
     display: none;
 }
@@ -181,6 +198,10 @@ body {
     border: 1px solid transparent;
 }
 
+.video-item-disabled {
+    opacity: 0.65;
+}
+
 .video-click-area {
     flex: 1;
     cursor: pointer;
@@ -190,15 +211,39 @@ body {
     min-width: 0;
 }
 
+.video-item-disabled .video-click-area {
+    cursor: default;
+}
+
 .play-icon {
     color: var(--blue-ui);
 }
 
 .v-name {
+    flex: 1;
+    min-width: 0;
     font-size: 0.8rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.v-meta {
+    color: var(--text-dim);
+    font-size: 0.72rem;
+    white-space: nowrap;
+    flex: 0 0 auto;
+}
+
+@media (max-width: 600px) {
+    .video-click-area {
+        flex-wrap: wrap;
+    }
+
+    .v-meta {
+        flex-basis: 100%;
+        padding-left: 28px;
+    }
 }
 
 .download-link {
@@ -241,6 +286,12 @@ body {
 .status-text,
 .video-total {
     font-weight: bold;
+}
+
+.info-note {
+    margin: 6px 0 0;
+    color: var(--text-dim);
+    font-size: 0.75rem;
 }
 
 .status-online {

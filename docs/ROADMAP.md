@@ -4,102 +4,39 @@ Este arquivo e o backlog unico do projeto. Quando uma tarefa for concluida, remo
 
 ## Prioridade alta
 
-- Corrigir o caminho do script de limpeza em `iniciar_nvr.sh`.
-  - Atual: `python3 ../limpeza.py`
-  - Esperado: `python3 limpeza.py`
-
-- Unificar o caminho de gravacoes entre `servidor.py`, `captura.py` e `limpeza.py`.
-  - O painel, a captura e a limpeza devem ler e escrever na mesma pasta.
-  - Evite caminhos relativos dependentes do diretorio de execucao.
-
-- Remover comandos de encerramento muito amplos.
-  - `iniciar_nvr.sh` usa `pkill -f ffmpeg`, que pode encerrar FFmpeg fora do NVRBox.
-  - `servidor.py` usa `pkill -9 -f image2pipe`, que pode derrubar streams ativos de outras cameras.
-  - O ideal e encerrar processos pelo PID controlado pelo proprio sistema.
-
-- Trocar a remocao de cameras de `GET` para `POST`.
-  - A rota atual `/apagar_camera/<nome>` altera estado por link simples.
-  - O HTML deve usar formulario com `method="POST"`.
-
-- Mascarar a URL RTSP na interface.
-  - `templates/detalhe.html` ainda exibe a URL completa.
-  - A senha nao deve aparecer no painel.
-
-- Garantir que a remocao de uma camera encerre o FFmpeg correspondente.
-  - `captura.py` deve comparar cameras ativas com `cameras.json`.
-  - Processos sem camera correspondente devem ser finalizados e removidos do controle interno.
+Nenhum item critico aberto no momento.
 
 ## Prioridade media
 
-- Melhorar a funcao de verificacao online.
-  - Usar `urllib.parse.urlparse`.
-  - Suportar URLs sem usuario e senha.
-  - Suportar portas diferentes de `554`.
+- Tratar melhor erros de leitura de `cameras.local.json`.
+  - Escrita atomica ja e usada.
+  - Falta exibir erro claro no painel quando o JSON local estiver invalido.
 
-- Validar dados ao cadastrar camera.
-  - Nome obrigatorio.
-  - Nome e slug sem duplicidade.
-  - URL RTSP valida.
-  - MAC em formato valido.
-
-- Tratar melhor erros de leitura e escrita do `cameras.json`.
-  - Abrir com `encoding='utf-8'`.
-  - Evitar que JSON invalido derrube painel ou captura sem mensagem clara.
-
-- Substituir `except:` generico por excecoes especificas.
-  - Registrar erros relevantes.
-  - Evitar `except: pass` em trechos criticos.
-
-- Decidir o uso do campo `protocolo`.
-  - Opcao 1: salvar UDP/TCP no `cameras.json` e usar no FFmpeg.
-  - Opcao 2: remover o campo da interface se ele nao sera usado.
-
-- Melhorar gerenciamento dos logs do FFmpeg.
-  - Evitar crescimento indefinido de `erro_<slug>.txt`.
-  - Considerar rotacao simples ou limite de tamanho.
-
-- Tornar `iniciar_nvr.sh` executavel e documentar o uso.
-  - Comando: `chmod +x iniciar_nvr.sh`
+- Validar melhor a selecao de armazenamento em ambientes Android.
+  - Confirmar caminhos reais usados por TV Box e smartphones.
+  - Tratar permissao negada de forma clara no painel.
 
 ## Prioridade baixa
 
-- Criar `requirements.txt` com dependencias Python.
-
-- Criar `README.md` com:
-  - descricao do projeto;
-  - requisitos;
-  - instalacao;
-  - execucao;
-  - configuracao das cameras;
-  - uso com Tailscale.
-
-- Mostrar o caminho de armazenamento usado pelo sistema no painel.
-
 - Melhorar mensagens no painel para:
-  - camera offline;
   - falha no live stream;
-  - ausencia de gravacoes;
   - disco perto do limite.
+
+- Tentar perfis RTSP conhecidos em sequencia quando o usuario nao souber o modelo.
 
 - Melhorar compatibilidade com dispositivos moveis.
 
 ## Melhorias futuras
 
 - Criar uma tela de configuracoes do sistema.
-  - Caminho de gravacoes.
   - Tempo de cada segmento.
   - Limite de limpeza do disco.
   - Transporte RTSP padrao.
-
-- Centralizar configuracoes em arquivo unico ou `.env`.
-  - Porta do Flask.
-  - Caminho das gravacoes.
-  - Limite de disco.
-  - Transporte RTSP padrao.
+  - Preferencias de exibicao.
 
 - Melhorar a organizacao do backend.
-  - Separar funcoes comuns em modulo auxiliar.
-  - Reutilizar carregamento de cameras e resolucao de caminhos.
+  - Separar regras de validacao e funcoes do painel em modulos menores.
+  - Manter `servidor.py` focado nas rotas Flask.
 
 - Gerenciar processos com `systemd`.
   - Servico para painel.
@@ -112,8 +49,6 @@ Este arquivo e o backlog unico do projeto. Quando uma tarefa for concluida, remo
   - Alterar URL RTSP.
   - Alterar MAC.
   - Alterar protocolo UDP/TCP.
-
-- Adicionar botao para testar conexao da camera antes de salvar.
 
 - Mostrar status detalhado por camera.
   - Online/offline.
@@ -136,14 +71,18 @@ Este arquivo e o backlog unico do projeto. Quando uma tarefa for concluida, remo
 
 - Adicionar download em lote de gravacoes.
 
+- Adicionar migracao manual de gravacoes entre armazenamentos.
+  - Copiar videos antigos para a memoria nova.
+  - Confirmar espaco disponivel antes da copia.
+
 - Criar indicador de saude do sistema.
   - Uso de disco.
   - Quantidade de cameras online.
   - Status dos processos.
   - Ultimo erro registrado.
 
-- Adicionar backup, importacao e exportacao de `cameras.json`.
+- Adicionar backup, importacao e exportacao de `cameras.local.json`.
 
-- Considerar autenticacao opcional.
-  - Nao e obrigatoria no uso atual via `localhost` ou Tailscale.
-  - Deve ser adicionada antes de qualquer exposicao fora de rede privada confiavel.
+- Criar recuperacao assistida de gravacoes antigas invalidas.
+  - Tentar remux com FFmpeg quando um `.mp4` antigo perdeu indice final.
+  - Manter arquivo original preservado durante a tentativa.

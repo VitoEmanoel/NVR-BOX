@@ -13,7 +13,7 @@
     <div class="header-nav">
         <div>
             <h1 class="camera-title">{{ camera.nome }}</h1>
-            <span class="camera-url">{{ camera.rtsp_url }}</span>
+            <span class="camera-url">{{ camera.rtsp_mascarado }}</span>
         </div>
         <a href="/" class="btn-back"><i class="ph ph-arrow-left"></i> Voltar ao painel</a>
     </div>
@@ -22,7 +22,14 @@
         <div class="player-section" id="player-container">
             <div class="display-container" id="video-wrapper">
                 <button class="fs-button" onclick="toggleFullScreen()"><i class="ph ph-corners-out"></i></button>
-                <img src="/live/{{ camera.nome }}" class="video-player" id="live-feed">
+                {% if camera.online %}
+                <img src="{{ url_for('live_stream', slug=camera.slug) }}" class="video-player" id="live-feed" alt="Ao vivo">
+                {% else %}
+                <div class="video-player offline-live" id="live-feed">
+                    <i class="ph ph-video-camera-slash"></i>
+                    <span>Câmera offline. As gravações salvas continuam disponíveis.</span>
+                </div>
+                {% endif %}
                 <video id="player" class="video-player video-player-recorded" controls></video>
             </div>
             <button onclick="voltarAoVivo()" id="btn-live"><i class="ph ph-broadcast"></i> VOLTAR PARA O AO VIVO</button>
@@ -39,12 +46,21 @@
             <div class="video-list">
                 {% if videos %}
                     {% for video in videos %}
-                    <div class="video-item">
-                        <div class="video-click-area" onclick="reproduzirVideo('{{ video }}')">
+                    <div class="video-item {% if not video.reproduzivel %}video-item-disabled{% endif %}">
+                        {% if video.reproduzivel %}
+                        <div class="video-click-area" onclick="reproduzirVideo({{ video.nome|tojson }})">
                             <i class="ph ph-play-circle play-icon"></i>
-                            <span class="v-name">{{ video }}</span>
+                            <span class="v-name">{{ video.nome }}</span>
+                            <span class="v-meta">{{ video.duracao }} · {{ video.tamanho }}</span>
                         </div>
-                        <a href="/download/{{ video }}" class="download-link"><i class="ph ph-download-simple"></i></a>
+                        <a href="{{ url_for('download_video', filename=video.nome) }}" class="download-link"><i class="ph ph-download-simple"></i></a>
+                        {% else %}
+                        <div class="video-click-area">
+                            <i class="ph ph-warning play-icon"></i>
+                            <span class="v-name">{{ video.nome }}</span>
+                            <span class="v-meta">Arquivo incompleto ou inválido · {{ video.tamanho }}</span>
+                        </div>
+                        {% endif %}
                     </div>
                     {% endfor %}
                 {% else %}
@@ -65,8 +81,9 @@
             </span>
         </div>
         <div class="info-card">
-            <h5>TOTAL DE VÍDEOS</h5>
-            <span class="video-total">{{ videos|length }}</span>
+            <h5>GRAVAÇÕES VÁLIDAS</h5>
+            <span class="video-total">{{ videos_validos }} / {{ videos|length }}</span>
+            <p class="info-note">Vídeos curtos também são reproduzíveis quando foram fechados ou gravados em formato protegido.</p>
         </div>
     </div>
 </div>
@@ -91,7 +108,7 @@
         liveFeed.style.display = 'none';
         player.style.display = 'block';
         btnLive.style.display = 'flex';
-        player.src = '/video/' + filename;
+        player.src = "{{ url_for('serve_video', filename='__FILENAME__') }}".replace('__FILENAME__', encodeURIComponent(filename));
         player.play();
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
