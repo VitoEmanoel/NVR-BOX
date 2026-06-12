@@ -6,7 +6,7 @@ import subprocess
 import shutil
 import socket
 from secrets import compare_digest
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from config import (
     AUTH_ATIVA,
@@ -57,6 +57,28 @@ def exigir_autenticacao():
 def buscar_camera_por_slug(cameras, slug):
     slug_normalizado = gerar_slug(slug)
     return next((camera for camera in cameras if slug_camera(camera) == slug_normalizado), None)
+
+
+def obter_caminho_manual_camera(camera):
+    parsed = urlparse(camera.get("rtsp_url", ""))
+    caminho = parsed.path or ""
+    if parsed.query:
+        caminho = f"{caminho}?{parsed.query}"
+    return camera.get("caminho_manual") or caminho
+
+
+def dados_edicao_camera(camera):
+    parsed = urlparse(camera.get("rtsp_url", ""))
+    return {
+        "nome": camera.get("nome", ""),
+        "ip": camera.get("ip") or parsed.hostname or "",
+        "usuario": camera.get("usuario") or unquote(parsed.username or "admin"),
+        "porta": str(camera.get("porta") or parsed.port or 554),
+        "mac": camera.get("mac", ""),
+        "perfil": camera.get("perfil", "onvif1"),
+        "protocolo": camera.get("protocolo", RTSP_TRANSPORTE_PADRAO),
+        "caminho_manual": obter_caminho_manual_camera(camera) if camera.get("perfil") == "manual" else "",
+    }
 
 def get_disk_info(caminho_videos):
     """Calcula o uso do HD externo de forma leve """
@@ -314,6 +336,79 @@ def validar_nova_camera(dados, cameras):
         "perfil": perfil,
     }, None
 
+
+def validar_edicao_camera(dados, cameras, slug_atual, camera_atual):
+    parsed_atual = urlparse(camera_atual.get("rtsp_url", ""))
+    senha_atual = unquote(parsed_atual.password or "")
+
+    ip = (dados.get("ip") or "").strip()
+    senha = (dados.get("senha") or "").strip() or senha_atual
+    usuario = (dados.get("usuario") or camera_atual.get("usuario") or "admin").strip()
+    porta = (dados.get("porta") or str(camera_atual.get("porta") or "554")).strip()
+    perfil = (dados.get("perfil") or camera_atual.get("perfil") or "onvif1").strip()
+    caminho_manual = (dados.get("caminho_manual") or "").strip()
+    nome = (dados.get("nome") or camera_atual.get("nome") or f"Camera {ip}").strip()
+    mac = (dados.get("mac") or "").strip()
+    protocolo = (dados.get("protocolo") or camera_atual.get("protocolo") or RTSP_TRANSPORTE_PADRAO).strip().lower()
+
+    if perfil == "manual" and not caminho_manual:
+        caminho_manual = obter_caminho_manual_camera(camera_atual)
+
+    if not nome:
+        return None, "Nome da camera e obrigatorio."
+    if not ip:
+        return None, "IP da camera e obrigatorio."
+    if not senha:
+        return None, "Senha da camera e obrigatoria."
+    if not usuario:
+        return None, "Usuario da camera e obrigatorio."
+    if not porta.isdigit() or not 1 <= int(porta) <= 65535:
+        return None, "Porta RTSP invalida."
+    if perfil != "manual" and perfil not in RTSP_PERFIS:
+        return None, "Perfil RTSP invalido."
+    if perfil == "manual" and not caminho_manual:
+        return None, "Caminho RTSP manual e obrigatorio."
+    if protocolo not in {"udp", "tcp"}:
+        return None, "Protocolo invalido."
+    if mac and not MAC_REGEX.match(mac):
+        return None, "MAC invalido. Use o formato aa:bb:cc:dd:ee:ff."
+
+    for camera in cameras:
+        if slug_camera(camera) == slug_atual:
+            continue
+        if camera.get("nome", "").strip().lower() == nome.lower():
+            return None, "Ja existe uma camera com esse nome."
+
+    rtsp_url = construir_rtsp_url(ip, senha, usuario, perfil, porta, caminho_manual)
+    parsed = urlparse(rtsp_url)
+    if parsed.scheme != "rtsp" or not parsed.hostname:
+        return None, "URL RTSP invalida."
+
+    rtsp_alterado = rtsp_url != camera_atual.get("rtsp_url") or protocolo != camera_atual.get("protocolo")
+    if TESTAR_RTSP_CADASTRO and rtsp_alterado:
+        ok, erro = testar_rtsp_stream(rtsp_url, protocolo)
+        if not ok:
+            return None, erro
+
+    camera_atualizada = dict(camera_atual)
+    camera_atualizada.update({
+        "nome": nome,
+        "rtsp_url": rtsp_url,
+        "mac": mac.lower(),
+        "slug": slug_atual,
+        "protocolo": protocolo,
+        "usuario": usuario,
+        "ip": ip,
+        "porta": int(porta),
+        "perfil": perfil,
+    })
+    if perfil == "manual":
+        camera_atualizada["caminho_manual"] = caminho_manual
+    else:
+        camera_atualizada.pop("caminho_manual", None)
+
+    return camera_atualizada, None
+
 def gerar_frames(camera):
     rtsp_url = camera['rtsp_url']
     transporte = camera.get('protocolo', RTSP_TRANSPORTE_PADRAO)
@@ -411,6 +506,21 @@ def index():
 
 @app.route('/camera/<slug>')
 def detalhe_camera(slug):
+    return renderizar_detalhe_camera(
+        slug,
+        mensagem_erro=request.args.get("erro"),
+        mensagem_sucesso=request.args.get("sucesso"),
+    )
+
+
+def renderizar_detalhe_camera(
+    slug,
+    mensagem_erro=None,
+    mensagem_sucesso=None,
+    form_data=None,
+    status=200,
+    edicao_aberta=False,
+):
     caminho_videos = get_caminho_videos()
     cameras = carregar_cameras()
     camera = buscar_camera_por_slug(cameras, slug)
@@ -433,7 +543,12 @@ def detalhe_camera(slug):
         videos=videos,
         videos_validos=videos_validos,
         data_filtro=data_filtro,
-    )
+        perfis_rtsp=RTSP_PERFIS,
+        mensagem_erro=mensagem_erro,
+        mensagem_sucesso=mensagem_sucesso,
+        form_data=form_data or dados_edicao_camera(camera),
+        edicao_aberta=edicao_aberta,
+    ), status
 
 
 @app.route('/live/<slug>')
@@ -483,6 +598,36 @@ def adicionar_camera():
     cameras.append(nova_camera)
     salvar_cameras(cameras)
     return redirect(url_for('index', sucesso="Camera adicionada."))
+
+
+@app.route('/editar_camera/<slug>', methods=['POST'])
+def editar_camera(slug):
+    cameras = carregar_cameras()
+    slug_normalizado = gerar_slug(slug)
+    for indice, camera in enumerate(cameras):
+        if slug_camera(camera) != slug_normalizado:
+            continue
+
+        camera_atualizada, erro = validar_edicao_camera(
+            request.form,
+            cameras,
+            slug_normalizado,
+            camera,
+        )
+        if erro:
+            return renderizar_detalhe_camera(
+                slug_normalizado,
+                mensagem_erro=erro,
+                form_data=request.form,
+                status=400,
+                edicao_aberta=True,
+            )
+
+        cameras[indice] = camera_atualizada
+        salvar_cameras(cameras)
+        return redirect(url_for('detalhe_camera', slug=slug_normalizado, sucesso="Camera atualizada."))
+
+    return redirect(url_for('index', erro="Camera nao encontrada."))
 
 
 @app.route('/apagar_camera/<slug>', methods=['POST'])

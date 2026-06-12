@@ -57,7 +57,14 @@ def iniciar_ffmpeg(cam, caminho_videos):
     ]
     f_log = open(log_file, "w", encoding="utf-8")
     processo = subprocess.Popen(comando, stdout=subprocess.DEVNULL, stderr=f_log)
-    return {"processo": processo, "log": f_log}
+    return {"processo": processo, "log": f_log, "assinatura": assinatura_camera(cam)}
+
+
+def assinatura_camera(cam):
+    return (
+        cam.get('rtsp_url', ''),
+        cam.get('protocolo', RTSP_TRANSPORTE_PADRAO),
+    )
 
 def encerrar_ffmpeg(registro):
     processo = registro["processo"]
@@ -111,9 +118,13 @@ if __name__ == '__main__':
                 nome = cam['nome']
                 slug = slug_camera(cam)
                 registro = processos.get(slug)
+                assinatura = assinatura_camera(cam)
                 if registro and registro["processo"].poll() is not None:
                     registro["log"].close()
                     processos.pop(slug)
+                elif registro and registro.get("assinatura") != assinatura:
+                    print(f"[!] Configuracao alterada. Reiniciando captura: {nome}", flush=True)
+                    encerrar_ffmpeg(processos.pop(slug))
 
                 if slug not in processos:
                     print(f"[!] Iniciando captura: {nome} -> {mascarar_rtsp(cam['rtsp_url'])}", flush=True)

@@ -46,6 +46,13 @@ body {
     color: var(--text-dim);
 }
 
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
 .btn-back {
     background: #1f2937;
     color: white;
@@ -57,6 +64,119 @@ body {
     align-items: center;
     gap: 8px;
     font-size: 0.9rem;
+}
+
+.btn-edit {
+    background: var(--blue-ui);
+    color: white;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.alert {
+    border-radius: 8px;
+    font-size: 0.9rem;
+    margin-bottom: 14px;
+    padding: 10px 12px;
+}
+
+.alert-error {
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.45);
+    color: #fecaca;
+}
+
+.alert-success {
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.45);
+    color: #bbf7d0;
+}
+
+.edit-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 20px;
+    padding: 18px;
+}
+
+.edit-panel h3 {
+    align-items: center;
+    display: flex;
+    font-size: 1rem;
+    gap: 8px;
+    margin: 0 0 14px;
+}
+
+.edit-form-grid {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.edit-form-grid label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.edit-form-grid span {
+    color: var(--text-dim);
+    font-size: 0.72rem;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.edit-form-grid input,
+.edit-form-grid select {
+    background: #0f172a;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: white;
+    min-width: 0;
+    padding: 11px;
+    width: 100%;
+}
+
+.manual-path-edit {
+    grid-column: 1 / -1;
+}
+
+.edit-form-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 14px;
+}
+
+.btn-save,
+.btn-cancel {
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    padding: 11px 14px;
+}
+
+.btn-save {
+    align-items: center;
+    background: var(--success);
+    color: white;
+    display: flex;
+    gap: 8px;
+}
+
+.btn-cancel {
+    background: #1f2937;
+    color: white;
 }
 
 .main-layout {
@@ -242,8 +362,26 @@ button.video-click-area:focus-visible {
     border-radius: 6px;
 }
 
-.play-icon {
-    color: var(--blue-ui);
+.recording-action {
+    align-items: center;
+    border-radius: 999px;
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: 0.72rem;
+    font-weight: bold;
+    gap: 5px;
+    padding: 4px 8px;
+    white-space: nowrap;
+}
+
+.recording-action-play {
+    background: rgba(59, 130, 246, 0.16);
+    color: #93c5fd;
+}
+
+.recording-action-warning {
+    background: rgba(239, 68, 68, 0.14);
+    color: #fecaca;
 }
 
 .v-name {
@@ -274,8 +412,23 @@ button.video-click-area:focus-visible {
 }
 
 .download-link {
+    align-items: center;
+    border: 1px solid var(--border);
+    border-radius: 999px;
     color: var(--text-dim);
-    padding: 5px;
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: 0.72rem;
+    font-weight: bold;
+    gap: 5px;
+    padding: 6px 9px;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.download-link:hover {
+    border-color: var(--blue-ui);
+    color: white;
 }
 
 .empty-message {
@@ -337,5 +490,31 @@ button.video-click-area:focus-visible {
     .history-section {
         height: auto;
         max-height: 400px;
+    }
+}
+
+@media (max-width: 600px) {
+    .header-actions,
+    .edit-form-actions {
+        width: 100%;
+    }
+
+    .btn-edit,
+    .btn-back,
+    .btn-save,
+    .btn-cancel {
+        justify-content: center;
+        width: 100%;
+    }
+
+    .video-item {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .download-link {
+        justify-content: center;
+        width: 100%;
     }
 }

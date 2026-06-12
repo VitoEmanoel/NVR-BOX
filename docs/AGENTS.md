@@ -10,7 +10,7 @@ O uso previsto e local: `localhost`, rede local confiavel ou Tailscale. O painel
 
 ## Estrutura principal
 
-- `servidor.py`: aplicacao Flask do painel web. Lista cameras, mostra status, abre live view, exibe historico, reproduz gravacoes no navegador, permite download e cadastra/remove cameras.
+- `servidor.py`: aplicacao Flask do painel web. Lista cameras, mostra status, abre live view, exibe historico, reproduz gravacoes no navegador, permite download e cadastra/edita/remove cameras.
 - `captura.py`: processo continuo de captura. Le `cameras.local.json`, inicia um FFmpeg por camera e grava segmentos `.mp4` fragmentados.
 - `limpeza.py`: rotina de limpeza automatica. Monitora o uso do disco e apaga videos antigos elegiveis quando o limite configurado e ultrapassado.
 - `config.py`: configuracoes e funcoes compartilhadas, incluindo armazenamento, carregamento/salvamento de cameras, slug, perfis RTSP e mascaramento de RTSP.
@@ -36,7 +36,7 @@ O uso previsto e local: `localhost`, rede local confiavel ou Tailscale. O painel
 3. `captura.py` carrega as cameras configuradas em `cameras.local.json`.
 4. Para cada camera, o script inicia um processo `ffmpeg`.
 5. O FFmpeg grava segmentos de video fragmentados na pasta de gravacoes escolhida.
-6. Se o armazenamento escolhido mudar, `captura.py` reinicia os FFmpeg para gravar no novo caminho.
+6. Se o armazenamento escolhido mudar ou se RTSP/protocolo de uma camera mudar, `captura.py` reinicia os FFmpeg afetados.
 7. `servidor.py` lista gravacoes, valida reproducao com `ffprobe` e separa arquivos incompletos.
 8. Ao clicar em uma gravacao, o front-end interrompe o live view e abre o player com `/video_compativel/<arquivo>`.
 9. `limpeza.py` acompanha o armazenamento ativo e remove videos antigos quando necessario.
@@ -54,7 +54,7 @@ O uso previsto e local: `localhost`, rede local confiavel ou Tailscale. O painel
 - Centralize caminhos compartilhados quando mexer em gravacoes ou em `cameras.local.json`.
 - Use slugs sanitizados para rotas, nomes de arquivos e logs.
 - Valide dados recebidos de formularios antes de salvar.
-- No cadastro simplificado, o painel recebe nome, IP, senha, perfil RTSP e campos avancados opcionais; a URL RTSP e montada no backend.
+- No cadastro e na edicao, o painel recebe nome, IP, senha, perfil RTSP e campos avancados opcionais; a URL RTSP e montada no backend.
 - Novas cameras sao testadas com `ffprobe` antes de salvar, salvo quando `NVRBOX_TESTAR_RTSP_CADASTRO=0`.
 - Nao exponha URL RTSP completa na interface, pois ela pode conter usuario e senha.
 - Rotas que alteram estado devem usar `POST`.

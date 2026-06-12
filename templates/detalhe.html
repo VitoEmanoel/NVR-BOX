@@ -15,8 +15,74 @@
             <h1 class="camera-title">{{ camera.nome }}</h1>
             <span class="camera-url">{{ camera.rtsp_mascarado }}</span>
         </div>
-        <a href="/" class="btn-back"><i class="ph ph-arrow-left"></i> Voltar ao painel</a>
+        <div class="header-actions">
+            <button type="button" class="btn-edit" id="btn-edit"><i class="ph ph-pencil-simple"></i> Editar</button>
+            <a href="/" class="btn-back"><i class="ph ph-arrow-left"></i> Voltar ao painel</a>
+        </div>
     </div>
+
+    {% if mensagem_erro %}
+    <div class="alert alert-error">{{ mensagem_erro }}</div>
+    {% endif %}
+    {% if mensagem_sucesso %}
+    <div class="alert alert-success">{{ mensagem_sucesso }}</div>
+    {% endif %}
+
+    <section class="edit-panel" id="edit-panel" {% if not edicao_aberta %}hidden{% endif %}>
+        <h3><i class="ph ph-pencil-simple"></i> Editar câmera</h3>
+        <form action="{{ url_for('editar_camera', slug=camera.slug) }}" method="POST" class="edit-camera-form">
+            <div class="edit-form-grid">
+                <label>
+                    <span>Nome</span>
+                    <input type="text" name="nome" value="{{ form_data.get('nome', '') }}" required>
+                </label>
+                <label>
+                    <span>IP</span>
+                    <input type="text" name="ip" value="{{ form_data.get('ip', '') }}" required>
+                </label>
+                <label>
+                    <span>Senha</span>
+                    <input type="password" name="senha" placeholder="Nova senha ou deixe em branco">
+                </label>
+                <label>
+                    <span>Perfil RTSP</span>
+                    <select name="perfil" id="perfil-editar">
+                        {% for chave, perfil in perfis_rtsp.items() %}
+                        <option value="{{ chave }}" {% if form_data.get('perfil', 'onvif1') == chave %}selected{% endif %}>{{ perfil.nome }}</option>
+                        {% endfor %}
+                        <option value="manual" {% if form_data.get('perfil') == 'manual' %}selected{% endif %}>Manual</option>
+                    </select>
+                </label>
+                <label>
+                    <span>Usuário</span>
+                    <input type="text" name="usuario" value="{{ form_data.get('usuario', 'admin') }}" required>
+                </label>
+                <label>
+                    <span>Porta RTSP</span>
+                    <input type="number" name="porta" value="{{ form_data.get('porta', '554') }}" min="1" max="65535" required>
+                </label>
+                <label>
+                    <span>MAC</span>
+                    <input type="text" name="mac" value="{{ form_data.get('mac', '') }}" placeholder="aa:bb:cc:dd:ee:ff">
+                </label>
+                <label>
+                    <span>Protocolo</span>
+                    <select name="protocolo">
+                        <option value="udp" {% if form_data.get('protocolo', 'udp') == 'udp' %}selected{% endif %}>UDP</option>
+                        <option value="tcp" {% if form_data.get('protocolo') == 'tcp' %}selected{% endif %}>TCP</option>
+                    </select>
+                </label>
+                <label class="manual-path-edit">
+                    <span>Caminho RTSP manual</span>
+                    <input type="text" name="caminho_manual" id="caminho-manual-editar" value="{{ form_data.get('caminho_manual', '') }}" placeholder="/onvif1">
+                </label>
+            </div>
+            <div class="edit-form-actions">
+                <button type="submit" class="btn-save"><i class="ph ph-check"></i> Salvar alterações</button>
+                <button type="button" class="btn-cancel" id="btn-cancel-edit">Cancelar</button>
+            </div>
+        </form>
+    </section>
 
     <div class="main-layout">
         <div class="player-section" id="player-container">
@@ -50,14 +116,16 @@
                     <div class="video-item {% if not video.reproduzivel %}video-item-disabled{% endif %}">
                         {% if video.reproduzivel %}
                         <button type="button" class="video-click-area js-play-video" data-video="{{ video.nome }}">
-                            <i class="ph ph-play-circle play-icon"></i>
+                            <span class="recording-action recording-action-play"><i class="ph ph-play-circle"></i><span>Player</span></span>
                             <span class="v-name">{{ video.nome }}</span>
                             <span class="v-meta">{{ video.duracao }} · {{ video.tamanho }}</span>
                         </button>
-                        <a href="{{ url_for('download_video', filename=video.nome) }}" class="download-link"><i class="ph ph-download-simple"></i></a>
+                        <a href="{{ url_for('download_video', filename=video.nome) }}" class="download-link" title="Baixar gravação">
+                            <i class="ph ph-download-simple"></i><span>Download</span>
+                        </a>
                         {% else %}
                         <div class="video-click-area">
-                            <i class="ph ph-warning play-icon"></i>
+                            <span class="recording-action recording-action-warning"><i class="ph ph-warning"></i><span>Inválido</span></span>
                             <span class="v-name">{{ video.nome }}</span>
                             <span class="v-meta">Arquivo incompleto ou inválido · {{ video.tamanho }}</span>
                         </div>
@@ -93,6 +161,11 @@
     const liveFeed = document.getElementById('live-feed');
     const btnLive = document.getElementById('btn-live');
     const playerStatus = document.getElementById('player-status');
+    const btnEdit = document.getElementById('btn-edit');
+    const editPanel = document.getElementById('edit-panel');
+    const btnCancelEdit = document.getElementById('btn-cancel-edit');
+    const perfilEditar = document.getElementById('perfil-editar');
+    const caminhoManualEditar = document.getElementById('caminho-manual-editar');
     const videoCompativelUrl = "{{ url_for('serve_video_compativel', filename='__FILENAME__') }}";
     const liveOriginalSrc = liveFeed.dataset.liveSrc || liveFeed.getAttribute('src') || '';
     let videoAtual = "";
@@ -185,6 +258,25 @@
             reproduzirVideo(botao.dataset.video);
         });
     });
+
+    function alternarEdicao() {
+        editPanel.hidden = !editPanel.hidden;
+        if (!editPanel.hidden) {
+            editPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+
+    function alternarCaminhoManualEdicao() {
+        const labelManual = caminhoManualEditar.closest('label');
+        labelManual.style.display = perfilEditar.value === 'manual' ? 'block' : 'none';
+    }
+
+    btnEdit.addEventListener('click', alternarEdicao);
+    btnCancelEdit.addEventListener('click', () => {
+        editPanel.hidden = true;
+    });
+    perfilEditar.addEventListener('change', alternarCaminhoManualEdicao);
+    alternarCaminhoManualEdicao();
 </script>
 
 </body>

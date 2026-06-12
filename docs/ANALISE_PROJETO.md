@@ -4,7 +4,7 @@
 
 O NVRBox e um prototipo de NVR residencial com arquitetura simples e funcional. O sistema usa Flask para o painel web, FFmpeg para captura RTSP e arquivos `.mp4` segmentados e fragmentados para armazenar as gravacoes. A tela de detalhe tambem usa FFmpeg para entregar uma versao WebM compativel quando o navegador nao consegue tocar o `.mp4` original diretamente.
 
-A proposta atual e adequada para uso local, estudo e demonstracao de TCC. O projeto ja recebeu melhorias importantes de confiabilidade e usabilidade, incluindo configuracao de armazenamento pelo painel, cadastro simplificado de cameras, teste RTSP antes de salvar novas cameras, mascaramento de RTSP na interface, separacao de HTML/CSS, slugs seguros, escrita atomica de JSON, MP4 fragmentado para gravacoes curtas, validacao de arquivos gravados, reproducao de gravacoes no painel com fallback compativel para navegador, autenticacao opcional, rotacao simples de logs do FFmpeg e arquivo local de cameras fora do Git. As proximas evolucoes mais importantes sao tratar melhor erros de JSON local, validar melhor Android/TV Box e preparar operacao como servico. As tarefas acionaveis ficam centralizadas em `docs/ROADMAP.md`.
+A proposta atual e adequada para uso local, estudo e demonstracao de TCC. O projeto ja recebeu melhorias importantes de confiabilidade e usabilidade, incluindo configuracao de armazenamento pelo painel, cadastro simplificado de cameras, edicao de cameras pela tela de detalhe, teste RTSP antes de salvar novas cameras, mascaramento de RTSP na interface, separacao de HTML/CSS, slugs seguros, escrita atomica de JSON, MP4 fragmentado para gravacoes curtas, validacao de arquivos gravados, reproducao de gravacoes no painel com fallback compativel para navegador, autenticacao opcional, rotacao simples de logs do FFmpeg e arquivo local de cameras fora do Git. As proximas evolucoes mais importantes sao tratar melhor erros de JSON local, validar melhor Android/TV Box e preparar operacao como servico. As tarefas acionaveis ficam centralizadas em `docs/ROADMAP.md`.
 
 ## Arquitetura atual
 
@@ -32,7 +32,7 @@ Fluxo principal:
 3. `captura.py` le `cameras.local.json`.
 4. Para cada camera configurada, inicia um processo `ffmpeg`.
 5. O FFmpeg grava segmentos `.mp4` na pasta escolhida.
-6. Se o armazenamento for alterado no painel, `captura.py` reinicia os FFmpeg para usar o novo caminho.
+6. Se o armazenamento for alterado no painel ou se RTSP/protocolo de uma camera mudar, `captura.py` reinicia os FFmpeg afetados.
 7. `servidor.py` lista cameras, status e arquivos gravados no armazenamento ativo.
 8. Na tela de detalhe, o clique em uma gravacao interrompe o live view e abre o player gravado.
 9. Se o `.mp4` original nao for adequado para o navegador, `/video_compativel/<arquivo>` entrega WebM gerado sob demanda pelo FFmpeg.
@@ -43,12 +43,14 @@ Fluxo principal:
 O projeto ja entrega as funcoes centrais de um painel NVR simples:
 
 - cadastro simplificado de cameras por nome, IP, senha e perfil RTSP;
+- edicao de cameras pela tela de detalhe, preservando o slug e as gravacoes antigas;
 - listagem de cameras;
 - status online/offline;
 - live view via MJPEG;
 - historico de gravacoes;
 - filtro por data;
 - reproducao de gravacoes dentro do painel;
+- acoes explicitas de player e download na lista de gravacoes;
 - fallback WebM sob demanda para navegadores que nao tocam o `.mp4` original da camera;
 - download de videos;
 - limpeza automatica de gravacoes antigas;
@@ -116,7 +118,7 @@ Quando o armazenamento muda, a captura encerra os processos FFmpeg ativos e rein
 
 ### Dados e validacao
 
-O cadastro de cameras monta a URL RTSP no backend a partir de nome, IP, senha, usuario, porta e perfil RTSP. O fluxo padrao pede nome, IP, senha e perfil, mantendo campos avancados para modelos fora do padrao. O sistema testa o stream RTSP com `ffprobe` antes de salvar novas cameras, comportamento que pode ser desligado com `NVRBOX_TESTAR_RTSP_CADASTRO=0`.
+O cadastro de cameras monta a URL RTSP no backend a partir de nome, IP, senha, usuario, porta e perfil RTSP. O fluxo padrao pede nome, IP, senha e perfil, mantendo campos avancados para modelos fora do padrao. A tela de detalhe permite editar nome, IP, senha, usuario, porta, MAC, perfil e protocolo sem recriar a camera; o slug e preservado para manter o historico de gravacoes associado. O sistema testa o stream RTSP com `ffprobe` antes de salvar novas cameras e tambem antes de salvar edicoes que alterem RTSP ou protocolo, comportamento que pode ser desligado com `NVRBOX_TESTAR_RTSP_CADASTRO=0`.
 
 O campo `protocolo` e salvo no JSON e usado pelo FFmpeg na captura e no live stream.
 

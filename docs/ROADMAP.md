@@ -44,12 +44,6 @@ Nenhum item critico aberto no momento.
   - Servico para limpeza.
   - Restart automatico em caso de falha.
 
-- Adicionar edicao de cameras cadastradas.
-  - Alterar nome.
-  - Alterar URL RTSP.
-  - Alterar MAC.
-  - Alterar protocolo UDP/TCP.
-
 - Mostrar status detalhado por camera.
   - Online/offline.
   - Ultima gravacao.

@@ -25,9 +25,11 @@ Sem essas duas variaveis, o painel continua sem login para manter o uso local si
 - Historico de gravacoes por camera.
 - Filtro por data.
 - Reproducao de gravacoes no proprio painel.
+- Acoes explicitas de player e download na lista de gravacoes.
 - Rota de reproducao compativel com navegador usando FFmpeg/WebM quando o `.mp4` original nao toca diretamente.
 - Download de videos.
 - Remocao de cameras por `POST`.
+- Edicao de cameras pela tela de detalhe, mantendo o slug e as gravacoes antigas.
 - Mascaramento de senha RTSP na interface.
 - Escolha da memoria de gravacao pelo painel.
 - Limpeza automatica quando o disco passa do limite configurado.
@@ -118,7 +120,9 @@ As opcoes avancadas permitem ajustar:
 - protocolo UDP/TCP;
 - caminho RTSP manual.
 
-As cameras ficam salvas em `cameras.local.json`, que e um arquivo local da maquina e nao deve ser versionado. O repositorio mantem `cameras.example.json` apenas como modelo sem credenciais reais.
+As cameras ficam salvas em `cameras.local.json`, que e um arquivo local da maquina e nao deve ser versionado. O repositorio mantem `cameras.example.json` apenas como modelo sem credenciais reais. Cameras ja cadastradas podem ser editadas pela tela de detalhe; se a senha ficar em branco, a senha atual e mantida.
+
+Ao editar IP, perfil, porta, usuario, senha ou protocolo, o slug da camera e preservado para manter o historico de gravacoes. A captura detecta a alteracao e reinicia o FFmpeg daquela camera no proximo ciclo do watchdog.
 
 Para criar uma configuracao inicial manualmente, copie o exemplo e ajuste os dados:
 
