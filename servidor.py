@@ -1,5 +1,5 @@
 
-from flask import Flask, render_template, send_from_directory, request, redirect, url_for, Response
+from flask import Flask, jsonify, render_template, send_from_directory, request, redirect, url_for, Response
 import os
 import re
 import subprocess
@@ -187,6 +187,36 @@ def listar_videos_camera(caminho_videos, slug_fixo, data_filtro=""):
 
     nomes.sort(reverse=True)
     return [obter_info_video(caminho_videos, nome) for nome in nomes]
+
+
+def listar_videos_camera_leve(caminho_videos, slug_fixo, data_filtro=""):
+    try:
+        nomes = [
+            f for f in os.listdir(caminho_videos)
+            if f.startswith(slug_fixo) and f.endswith('.mp4')
+        ]
+    except OSError:
+        return []
+
+    if data_filtro:
+        nomes = [f for f in nomes if data_filtro in f]
+
+    nomes.sort(reverse=True)
+    videos = []
+    for nome in nomes:
+        caminho = os.path.join(caminho_videos, nome)
+        try:
+            tamanho = os.path.getsize(caminho)
+        except OSError:
+            tamanho = 0
+
+        videos.append({
+            "nome": nome,
+            "tamanho": formatar_tamanho(tamanho),
+            "duracao": "",
+            "reproduzivel": True,
+        })
+    return videos
 
 
 def obter_caminho_video_seguro(filename):
@@ -521,27 +551,21 @@ def renderizar_detalhe_camera(
     status=200,
     edicao_aberta=False,
 ):
-    caminho_videos = get_caminho_videos()
     cameras = carregar_cameras()
     camera = buscar_camera_por_slug(cameras, slug)
     if not camera:
         return redirect(url_for('index'))
 
     data_filtro = request.args.get('data', '')
-
-    esta_viva = verificar_online(camera['rtsp_url'])
-    camera['online'] = esta_viva 
+    camera['online'] = None
     camera['rtsp_mascarado'] = mascarar_rtsp(camera['rtsp_url'])
-    slug_fixo = slug_camera(camera)
-    camera['slug'] = slug_fixo
-    videos = listar_videos_camera(caminho_videos, slug_fixo, data_filtro)
-    videos_validos = sum(1 for video in videos if video["reproduzivel"])
+    camera['slug'] = slug_camera(camera)
 
     return render_template(
         'detalhe.html',
         camera=camera,
-        videos=videos,
-        videos_validos=videos_validos,
+        videos=[],
+        videos_validos=None,
         data_filtro=data_filtro,
         perfis_rtsp=RTSP_PERFIS,
         mensagem_erro=mensagem_erro,
@@ -558,6 +582,37 @@ def live_stream(slug):
     if camera:
         return Response(gerar_frames(camera), mimetype='multipart/x-mixed-replace; boundary=frame')
     return "Camera nao encontrada", 404
+
+
+@app.route('/api/camera/<slug>/status')
+def api_camera_status(slug):
+    cameras = carregar_cameras()
+    camera = buscar_camera_por_slug(cameras, slug)
+    if not camera:
+        return jsonify({"erro": "Camera nao encontrada"}), 404
+
+    online = verificar_online(camera['rtsp_url'])
+    return jsonify({
+        "online": online,
+        "live_url": url_for('live_stream', slug=slug_camera(camera)),
+    })
+
+
+@app.route('/api/camera/<slug>/videos')
+def api_camera_videos(slug):
+    cameras = carregar_cameras()
+    camera = buscar_camera_por_slug(cameras, slug)
+    if not camera:
+        return jsonify({"erro": "Camera nao encontrada"}), 404
+
+    data_filtro = request.args.get('data', '')
+    caminho_videos = get_caminho_videos()
+    videos = listar_videos_camera_leve(caminho_videos, slug_camera(camera), data_filtro)
+    return jsonify({
+        "videos": videos,
+        "videos_validos": len(videos),
+        "total_videos": len(videos),
+    })
 
 @app.route('/video/<filename>')
 def serve_video(filename):
