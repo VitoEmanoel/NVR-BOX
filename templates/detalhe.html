@@ -167,14 +167,28 @@
         liveFeed.style.display = 'none';
         liveFeed.hidden = true;
         liveFeedOffline.hidden = true;
+        liveFeedOffline.style.display = 'none';
         liveFeedLoading.hidden = true;
+        liveFeedLoading.style.display = 'none';
         liveFeed.removeAttribute('src');
     }
 
+    function mostrarPlayerVideo() {
+        esconderAoVivo();
+        player.hidden = false;
+        player.style.display = 'block';
+        btnLive.style.display = 'flex';
+    }
+
     function mostrarAoVivo() {
+        player.hidden = true;
+        player.style.display = 'none';
+        btnLive.style.display = 'none';
         if (liveFeed.dataset.liveSrc) {
             liveFeedLoading.hidden = true;
+            liveFeedLoading.style.display = 'none';
             liveFeedOffline.hidden = true;
+            liveFeedOffline.style.display = 'none';
             liveFeed.hidden = false;
             liveFeed.style.display = 'block';
             liveFeed.src = liveFeed.dataset.liveSrc;
@@ -182,12 +196,16 @@
             liveFeed.style.display = 'none';
             liveFeed.hidden = true;
             liveFeedLoading.hidden = true;
+            liveFeedLoading.style.display = 'none';
+            liveFeedOffline.hidden = false;
             liveFeedOffline.style.display = 'flex';
         } else {
             liveFeed.style.display = 'none';
             liveFeed.hidden = true;
             liveFeedLoading.hidden = false;
             liveFeedLoading.style.display = 'flex';
+            liveFeedOffline.hidden = true;
+            liveFeedOffline.style.display = 'none';
         }
     }
 
@@ -217,9 +235,7 @@
 
     function reproduzirVideo(filename) {
         videoAtual = filename;
-        esconderAoVivo();
-        player.style.display = 'block';
-        btnLive.style.display = 'flex';
+        mostrarPlayerVideo();
         atualizarStatus('Preparando gravação para reprodução...', 'player-status-info');
         carregarVideo(montarUrl(videoCompativelUrl, filename));
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -230,8 +246,6 @@
         player.pause();
         player.removeAttribute('src');
         player.load();
-        player.style.display = 'none';
-        btnLive.style.display = 'none';
         atualizarStatus('');
         mostrarAoVivo();
     }
@@ -307,8 +321,19 @@
 
     }
 
+    function encontrarBotaoVideo(elemento) {
+        let atual = elemento;
+        while (atual && atual !== videoList) {
+            if (atual.classList && atual.classList.contains('js-play-video')) {
+                return atual;
+            }
+            atual = atual.parentNode;
+        }
+        return null;
+    }
+
     videoList.addEventListener('click', (event) => {
-        const botao = event.target.closest('.js-play-video');
+        const botao = encontrarBotaoVideo(event.target);
         if (!botao) {
             return;
         }
@@ -319,9 +344,7 @@
         }
 
         videoAtual = videoUrl;
-        esconderAoVivo();
-        player.style.display = 'block';
-        btnLive.style.display = 'flex';
+        mostrarPlayerVideo();
         atualizarStatus('Preparando gravação para reprodução...', 'player-status-info');
         carregarVideo(videoUrl);
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -347,6 +370,7 @@
                 liveFeed.hidden = true;
                 liveFeed.style.display = 'none';
                 liveFeedLoading.hidden = true;
+                liveFeedLoading.style.display = 'none';
                 liveFeedOffline.hidden = false;
                 liveFeedOffline.style.display = 'flex';
             }
@@ -357,6 +381,7 @@
             liveFeed.hidden = true;
             liveFeed.style.display = 'none';
             liveFeedLoading.hidden = true;
+            liveFeedLoading.style.display = 'none';
             liveFeedOffline.hidden = false;
             liveFeedOffline.style.display = 'flex';
         }
