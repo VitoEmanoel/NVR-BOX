@@ -253,11 +253,11 @@
 
     function escapeHtml(value) {
         return String(value)
-            .replaceAll('&', '&amp;')
-            .replaceAll('<', '&lt;')
-            .replaceAll('>', '&gt;')
-            .replaceAll('"', '&quot;')
-            .replaceAll("'", '&#39;');
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
 
     function criarMetaVideo(video) {
@@ -293,7 +293,7 @@
 
             return `
                 <div class="video-item">
-                    <button type="button" class="video-click-area js-play-video" data-video="${nome}">
+                    <button type="button" class="video-click-area js-play-video" data-video-url="${montarUrl(videoCompativelUrl, video.nome)}">
                         <span class="recording-action recording-action-play"><i class="ph ph-play-circle"></i><span>Player</span></span>
                         <span class="v-name">${nome}</span>
                         <span class="v-meta">${meta}</span>
@@ -305,12 +305,27 @@
             `;
         }).join('');
 
-        videoList.querySelectorAll('.js-play-video').forEach((botao) => {
-            botao.addEventListener('click', () => {
-                reproduzirVideo(botao.dataset.video);
-            });
-        });
     }
+
+    videoList.addEventListener('click', (event) => {
+        const botao = event.target.closest('.js-play-video');
+        if (!botao) {
+            return;
+        }
+
+        const videoUrl = botao.dataset.videoUrl;
+        if (!videoUrl) {
+            return;
+        }
+
+        videoAtual = videoUrl;
+        esconderAoVivo();
+        player.style.display = 'block';
+        btnLive.style.display = 'flex';
+        atualizarStatus('Preparando gravação para reprodução...', 'player-status-info');
+        carregarVideo(videoUrl);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
 
     async function carregarStatusCamera() {
         try {
