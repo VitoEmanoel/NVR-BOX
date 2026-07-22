@@ -5,6 +5,7 @@ import re
 import subprocess
 import shutil
 import socket
+import time
 from secrets import compare_digest
 from urllib.parse import unquote, urlparse
 
@@ -35,6 +36,7 @@ print(f"Sistema rodando! Gravando em: {get_caminho_videos()}")
 
 MAC_REGEX = re.compile(r"^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$")
 VIDEO_INFO_CACHE = {}
+IDADE_MINIMA_EXCLUSAO_VIDEO = 60
 
 
 @app.before_request
@@ -203,6 +205,8 @@ def listar_videos_camera(caminho_videos, slug_fixo, data_filtro=""):
 def obter_caminho_video_seguro(filename):
     if not filename.endswith(".mp4"):
         return None
+    if os.path.basename(filename) != filename:
+        return None
 
     caminho_videos = os.path.abspath(get_caminho_videos())
     caminho_video = os.path.abspath(os.path.join(caminho_videos, filename))
@@ -215,6 +219,69 @@ def obter_caminho_video_seguro(filename):
         return None
 
     return caminho_video
+
+
+def nome_video_pertence_camera(nome_arquivo, slug_fixo):
+    return nome_arquivo.startswith(f"{slug_fixo}_") and nome_arquivo.endswith(".mp4")
+
+
+def video_pode_ser_excluido(caminho_video):
+    try:
+        return time.time() - os.path.getmtime(caminho_video) >= IDADE_MINIMA_EXCLUSAO_VIDEO
+    except OSError:
+        return False
+
+
+def limpar_cache_video(caminho_video):
+    for chave in list(VIDEO_INFO_CACHE):
+        if chave[0] == caminho_video:
+            VIDEO_INFO_CACHE.pop(chave, None)
+
+
+def apagar_video_camera(slug_fixo, nome_arquivo):
+    if not nome_video_pertence_camera(nome_arquivo, slug_fixo):
+        return False, "Video nao pertence a esta camera."
+
+    caminho_video = obter_caminho_video_seguro(nome_arquivo)
+    if not caminho_video:
+        return False, "Video nao encontrado."
+    if not video_pode_ser_excluido(caminho_video):
+        return False, "Video muito recente ou ainda em gravacao."
+
+    try:
+        os.remove(caminho_video)
+        limpar_cache_video(caminho_video)
+        return True, None
+    except OSError:
+        return False, "Nao foi possivel apagar o video."
+
+
+def apagar_todos_videos_camera(slug_fixo):
+    caminho_videos = get_caminho_videos()
+    apagados = 0
+    ignorados = 0
+    try:
+        nomes = os.listdir(caminho_videos)
+    except OSError:
+        return 0, 0
+
+    for nome in nomes:
+        if not nome_video_pertence_camera(nome, slug_fixo):
+            continue
+        caminho_video = obter_caminho_video_seguro(nome)
+        if not caminho_video:
+            continue
+        if not video_pode_ser_excluido(caminho_video):
+            ignorados += 1
+            continue
+        try:
+            os.remove(caminho_video)
+            limpar_cache_video(caminho_video)
+            apagados += 1
+        except OSError:
+            ignorados += 1
+
+    return apagados, ignorados
 
 
 def gerar_video_compativel(caminho_video):
@@ -688,6 +755,39 @@ def apagar_camera(slug):
     cams = [c for c in cams if slug_camera(c) != slug_normalizado]
     salvar_cameras(cams)
     return redirect(url_for('index', sucesso="Camera removida."))
+
+
+@app.route('/camera/<slug>/video/<filename>/apagar', methods=['POST'])
+def apagar_video(slug, filename):
+    cameras = carregar_cameras()
+    slug_normalizado = gerar_slug(slug)
+    camera = buscar_camera_por_slug(cameras, slug_normalizado)
+    if not camera:
+        return redirect(url_for('index', erro="Camera nao encontrada."))
+
+    ok, erro = apagar_video_camera(slug_normalizado, filename)
+    if not ok:
+        return redirect(url_for('detalhe_camera', slug=slug_normalizado, erro=erro))
+    return redirect(url_for('detalhe_camera', slug=slug_normalizado, sucesso="Video apagado."))
+
+
+@app.route('/camera/<slug>/videos/apagar_todos', methods=['POST'])
+def apagar_todos_videos(slug):
+    cameras = carregar_cameras()
+    slug_normalizado = gerar_slug(slug)
+    camera = buscar_camera_por_slug(cameras, slug_normalizado)
+    if not camera:
+        return redirect(url_for('index', erro="Camera nao encontrada."))
+
+    apagados, ignorados = apagar_todos_videos_camera(slug_normalizado)
+    if apagados == 0 and ignorados:
+        mensagem = "Nenhum video foi apagado. Ha arquivos recentes ou em gravacao."
+        return redirect(url_for('detalhe_camera', slug=slug_normalizado, erro=mensagem))
+    if ignorados:
+        mensagem = f"{apagados} videos apagados. {ignorados} recentes foram preservados."
+    else:
+        mensagem = f"{apagados} videos apagados."
+    return redirect(url_for('detalhe_camera', slug=slug_normalizado, sucesso=mensagem))
 
 @app.route('/configurar_armazenamento', methods=['POST'])
 def configurar_armazenamento():

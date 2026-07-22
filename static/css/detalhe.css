@@ -296,6 +296,27 @@ body {
     font-size: 0.9rem;
 }
 
+.delete-all-form {
+    margin: 0 0 10px;
+}
+
+.btn-delete-all {
+    align-items: center;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.45);
+    border-radius: 6px;
+    color: #fecaca;
+    cursor: pointer;
+    display: flex;
+    font-size: 0.78rem;
+    font-weight: bold;
+    gap: 6px;
+    justify-content: center;
+    min-height: 34px;
+    padding: 8px 10px;
+    width: 100%;
+}
+
 .filter-box {
     display: flex;
     gap: 5px;
@@ -432,6 +453,33 @@ button.video-click-area:focus-visible {
 
 .download-link:hover {
     border-color: var(--blue-ui);
+    color: white;
+}
+
+.delete-video-form {
+    flex: 0 0 auto;
+    margin: 0;
+}
+
+.delete-video-link {
+    align-items: center;
+    background: transparent;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    border-radius: 999px;
+    color: #fecaca;
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 0.9rem;
+    height: 30px;
+    justify-content: center;
+    padding: 0;
+    width: 30px;
+}
+
+.delete-video-link:hover,
+.btn-delete-all:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: var(--danger);
     color: white;
 }
 

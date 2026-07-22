@@ -106,6 +106,14 @@
         <div class="history-section">
             <div class="history-header">
                 <h3>Gravações</h3>
+                <form
+                    action="{{ url_for('apagar_todos_videos', slug=camera.slug) }}"
+                    method="POST"
+                    class="delete-all-form"
+                    onsubmit="return confirm('Apagar todas as gravações desta câmera? Os vídeos recentes ou em gravação serão preservados.')"
+                >
+                    <button type="submit" class="btn-delete-all"><i class="ph ph-trash"></i> Apagar todas</button>
+                </form>
                 <form class="filter-box" id="video-filter-form">
                     <input type="date" name="data" value="{{ data_filtro }}">
                     <button type="submit" class="btn-filter"><i class="ph ph-magnifying-glass"></i></button>
@@ -151,6 +159,7 @@
     const videoOriginalUrl = "{{ url_for('serve_video', filename='__FILENAME__') }}";
     const videoCompativelUrl = "{{ url_for('serve_video_compativel', filename='__FILENAME__') }}";
     const downloadVideoUrl = "{{ url_for('download_video', filename='__FILENAME__') }}";
+    const apagarVideoUrl = "{{ url_for('apagar_video', slug=camera.slug, filename='__FILENAME__') }}";
     const cameraStatusUrl = "{{ url_for('api_camera_status', slug=camera.slug) }}";
     const cameraVideosUrl = "{{ url_for('api_camera_videos', slug=camera.slug) }}";
     let videoAtual = null;
@@ -312,6 +321,7 @@
             const nome = escapeHtml(video.nome);
             const meta = escapeHtml(criarMetaVideo(video));
             const downloadUrl = montarUrl(downloadVideoUrl, video.nome);
+            const apagarUrl = escapeHtml(montarUrl(apagarVideoUrl, video.nome));
             if (!video.reproduzivel) {
                 return `
                     <div class="video-item video-item-disabled">
@@ -320,6 +330,11 @@
                             <span class="v-name">${nome}</span>
                             <span class="v-meta">Arquivo incompleto ou inválido · ${escapeHtml(video.tamanho)}</span>
                         </div>
+                        <form action="${apagarUrl}" method="POST" class="delete-video-form" onsubmit="return confirm('Apagar esta gravação?')">
+                            <button type="submit" class="delete-video-link" title="Apagar gravação">
+                                <i class="ph ph-trash"></i>
+                            </button>
+                        </form>
                     </div>
                 `;
             }
@@ -334,6 +349,11 @@
                     <a href="${downloadUrl}" class="download-link" title="Baixar gravação">
                         <i class="ph ph-download-simple"></i><span>Download</span>
                     </a>
+                    <form action="${apagarUrl}" method="POST" class="delete-video-form" onsubmit="return confirm('Apagar esta gravação?')">
+                        <button type="submit" class="delete-video-link" title="Apagar gravação">
+                            <i class="ph ph-trash"></i>
+                        </button>
+                    </form>
                 </div>
             `;
         }).join('');

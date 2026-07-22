@@ -28,13 +28,13 @@ O sistema continua sem tela de login por enquanto, pois o uso previsto e em rede
   - Clicar em uma camera deve abrir a tela individual.
   - Adicionar pausa/retomada geral para fechar os streams quando o mosaico nao estiver em uso.
 
-- [ ] Adicionar exclusao manual de gravacoes.
+- [x] Adicionar exclusao manual de gravacoes.
   - Apagar um video especifico.
   - Apagar todos os videos de uma camera.
   - Usar somente rotas `POST`.
   - Exigir confirmacao antes de apagar.
   - Permitir apagar apenas arquivos `.mp4` dentro da pasta de gravacoes ativa.
-  - Para apagar todos de uma camera, limitar aos arquivos que comecam com o slug da camera.
+  - Para apagar todos de uma camera, limitar aos arquivos que comecam com o slug da camera e preservar arquivos recentes ou em gravacao.
 
 - [ ] Reforcar e testar a limpeza automatica.
   - Confirmar que apaga quando o disco passa do limite configurado.
