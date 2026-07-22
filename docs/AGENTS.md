@@ -1,6 +1,6 @@
 # Guia de Manutencao do Projeto
 
-Este arquivo resume o contexto necessario para mexer no NVRBox sem precisar reler toda a analise tecnica. O backlog oficial fica em `docs/ROADMAP.md`; evite duplicar aqui listas de bugs ou tarefas pendentes.
+Este arquivo resume o contexto necessario para mexer no NVRBox sem precisar reler toda a documentacao tecnica. O controle oficial de melhorias fica em `docs/MELHORIAS.md`; evite duplicar aqui listas de bugs ou tarefas pendentes.
 
 ## Objetivo do sistema
 
@@ -26,8 +26,8 @@ O uso previsto e local: `localhost`, rede local confiavel ou Tailscale. O painel
 - `sistema.json`: configuracao local criada em runtime para salvar a memoria escolhida pelo usuario. Deve ficar fora do Git.
 - `templates/`: HTML renderizado pelo Flask.
 - `static/css/`: estilos CSS do painel.
-- `docs/ANALISE_PROJETO.md`: visao tecnica consolidada do projeto.
-- `docs/ROADMAP.md`: tarefas pendentes e melhorias planejadas.
+- `docs/DOCUMENTACAO_PROJETO.md`: documentacao tecnica consolidada do projeto.
+- `docs/MELHORIAS.md`: checklist unico de melhorias planejadas.
 
 ## Fluxo de execucao
 
@@ -96,4 +96,4 @@ http://127.0.0.1:5000
 
 ## Regra para documentacao
 
-Quando uma tarefa documentada for resolvida, remova ou atualize a entrada correspondente em `docs/ROADMAP.md` e em qualquer outro `.md` que ainda trate a mesma coisa como pendente.
+Quando uma tarefa documentada for resolvida, marque ou atualize a entrada correspondente em `docs/MELHORIAS.md` e evite manter a mesma pendencia duplicada em outros arquivos `.md`.

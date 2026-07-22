@@ -52,6 +52,10 @@ Instale as dependencias Python:
 pip install -r requirements.txt
 ```
 
+## Documentacao completa
+
+A descricao consolidada do projeto, tecnologias, funcionamento e requisitos fica em `docs/DOCUMENTACAO_PROJETO.md`.
+
 ## Execucao
 
 Para iniciar o sistema completo:
@@ -161,4 +165,4 @@ bash -n iniciar_nvr.sh
 
 ## Proximas melhorias
 
-As tarefas pendentes ficam em `docs/ROADMAP.md`. Os proximos pontos principais sao tratar melhor erros de JSON local, validar armazenamento em Android/TV Box e preparar execucao por servico.
+As tarefas pendentes ficam em `docs/MELHORIAS.md`, organizado como checklist para marcar o que ja foi concluido.

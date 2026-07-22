@@ -1,5 +1,5 @@
 
-from flask import Flask, jsonify, render_template, send_from_directory, request, redirect, url_for, Response
+from flask import Flask, jsonify, render_template, send_file, request, redirect, url_for, Response
 import os
 import re
 import subprocess
@@ -34,6 +34,7 @@ garantir_diretorios()
 print(f"Sistema rodando! Gravando em: {get_caminho_videos()}")
 
 MAC_REGEX = re.compile(r"^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$")
+VIDEO_INFO_CACHE = {}
 
 
 @app.before_request
@@ -134,8 +135,15 @@ def obter_info_video(caminho_videos, nome_arquivo):
     caminho = os.path.join(caminho_videos, nome_arquivo)
     try:
         tamanho = os.path.getsize(caminho)
+        modificado = os.path.getmtime(caminho)
     except OSError:
         tamanho = 0
+        modificado = 0
+
+    cache_key = (caminho, tamanho, modificado)
+    info_cache = VIDEO_INFO_CACHE.get(cache_key)
+    if info_cache:
+        return dict(info_cache)
 
     info = {
         "nome": nome_arquivo,
@@ -170,6 +178,9 @@ def obter_info_video(caminho_videos, nome_arquivo):
         except ValueError:
             pass
 
+    if len(VIDEO_INFO_CACHE) > 1000:
+        VIDEO_INFO_CACHE.clear()
+    VIDEO_INFO_CACHE[cache_key] = dict(info)
     return info
 
 
@@ -189,37 +200,10 @@ def listar_videos_camera(caminho_videos, slug_fixo, data_filtro=""):
     return [obter_info_video(caminho_videos, nome) for nome in nomes]
 
 
-def listar_videos_camera_leve(caminho_videos, slug_fixo, data_filtro=""):
-    try:
-        nomes = [
-            f for f in os.listdir(caminho_videos)
-            if f.startswith(slug_fixo) and f.endswith('.mp4')
-        ]
-    except OSError:
-        return []
-
-    if data_filtro:
-        nomes = [f for f in nomes if data_filtro in f]
-
-    nomes.sort(reverse=True)
-    videos = []
-    for nome in nomes:
-        caminho = os.path.join(caminho_videos, nome)
-        try:
-            tamanho = os.path.getsize(caminho)
-        except OSError:
-            tamanho = 0
-
-        videos.append({
-            "nome": nome,
-            "tamanho": formatar_tamanho(tamanho),
-            "duracao": "",
-            "reproduzivel": True,
-        })
-    return videos
-
-
 def obter_caminho_video_seguro(filename):
+    if not filename.endswith(".mp4"):
+        return None
+
     caminho_videos = os.path.abspath(get_caminho_videos())
     caminho_video = os.path.abspath(os.path.join(caminho_videos, filename))
     try:
@@ -607,16 +591,20 @@ def api_camera_videos(slug):
 
     data_filtro = request.args.get('data', '')
     caminho_videos = get_caminho_videos()
-    videos = listar_videos_camera_leve(caminho_videos, slug_camera(camera), data_filtro)
+    videos = listar_videos_camera(caminho_videos, slug_camera(camera), data_filtro)
+    videos_validos = sum(1 for video in videos if video["reproduzivel"])
     return jsonify({
         "videos": videos,
-        "videos_validos": len(videos),
+        "videos_validos": videos_validos,
         "total_videos": len(videos),
     })
 
 @app.route('/video/<filename>')
 def serve_video(filename):
-    return send_from_directory(get_caminho_videos(), filename)
+    caminho_video = obter_caminho_video_seguro(filename)
+    if not caminho_video:
+        return "Video nao encontrado", 404
+    return send_file(caminho_video, mimetype="video/mp4", conditional=True)
 
 
 @app.route('/video_compativel/<filename>')
@@ -704,7 +692,16 @@ def configurar_armazenamento():
 
 @app.route('/download/<filename>')
 def download_video(filename):
-    return send_from_directory(get_caminho_videos(), filename, as_attachment=True)
+    caminho_video = obter_caminho_video_seguro(filename)
+    if not caminho_video:
+        return "Video nao encontrado", 404
+    return send_file(
+        caminho_video,
+        mimetype="video/mp4",
+        as_attachment=True,
+        download_name=os.path.basename(caminho_video),
+        conditional=True,
+    )
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, threaded=True)

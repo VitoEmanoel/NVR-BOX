@@ -148,11 +148,12 @@
     const videoTotal = document.getElementById('video-total');
     const videoList = document.getElementById('video-list');
     const videoFilterForm = document.getElementById('video-filter-form');
+    const videoOriginalUrl = "{{ url_for('serve_video', filename='__FILENAME__') }}";
     const videoCompativelUrl = "{{ url_for('serve_video_compativel', filename='__FILENAME__') }}";
     const downloadVideoUrl = "{{ url_for('download_video', filename='__FILENAME__') }}";
     const cameraStatusUrl = "{{ url_for('api_camera_status', slug=camera.slug) }}";
     const cameraVideosUrl = "{{ url_for('api_camera_videos', slug=camera.slug) }}";
-    let videoAtual = "";
+    let videoAtual = null;
 
     function montarUrl(baseUrl, filename) {
         return baseUrl.replace('__FILENAME__', encodeURIComponent(filename));
@@ -209,8 +210,9 @@
         }
     }
 
-    function carregarVideo(src) {
+    function carregarVideo(src, origem) {
         player.pause();
+        player.dataset.origem = origem;
         player.src = src;
         player.load();
 
@@ -234,16 +236,20 @@
     }
 
     function reproduzirVideo(filename) {
-        videoAtual = filename;
+        videoAtual = {
+            nome: filename,
+            usandoFallback: false,
+        };
         mostrarPlayerVideo();
-        atualizarStatus('Preparando gravação para reprodução...', 'player-status-info');
-        carregarVideo(montarUrl(videoCompativelUrl, filename));
+        atualizarStatus('Abrindo gravação original...', 'player-status-info');
+        carregarVideo(montarUrl(videoOriginalUrl, filename), 'original');
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     function voltarAoVivo() {
-        videoAtual = "";
+        videoAtual = null;
         player.pause();
+        delete player.dataset.origem;
         player.removeAttribute('src');
         player.load();
         atualizarStatus('');
@@ -251,6 +257,10 @@
     }
 
     player.addEventListener('loadedmetadata', () => {
+        if (player.dataset.origem === 'fallback') {
+            atualizarStatus('Gravação compatível pronta.', 'player-status-info');
+            return;
+        }
         atualizarStatus('Gravação pronta.', 'player-status-info');
     });
 
@@ -260,6 +270,15 @@
 
     player.addEventListener('error', () => {
         if (!videoAtual) {
+            return;
+        }
+        if (player.error && player.error.code === 1) {
+            return;
+        }
+        if (!videoAtual.usandoFallback) {
+            videoAtual.usandoFallback = true;
+            atualizarStatus('MP4 original não tocou neste navegador. Preparando versão compatível...', 'player-status-info');
+            carregarVideo(montarUrl(videoCompativelUrl, videoAtual.nome), 'fallback');
             return;
         }
         atualizarStatus('Não foi possível reproduzir esta gravação no navegador.', 'player-status-error');
@@ -307,7 +326,7 @@
 
             return `
                 <div class="video-item">
-                    <button type="button" class="video-click-area js-play-video" data-video-url="${montarUrl(videoCompativelUrl, video.nome)}">
+                    <button type="button" class="video-click-area js-play-video" data-video-nome="${nome}">
                         <span class="recording-action recording-action-play"><i class="ph ph-play-circle"></i><span>Player</span></span>
                         <span class="v-name">${nome}</span>
                         <span class="v-meta">${meta}</span>
@@ -338,16 +357,12 @@
             return;
         }
 
-        const videoUrl = botao.dataset.videoUrl;
-        if (!videoUrl) {
+        const videoNome = botao.dataset.videoNome;
+        if (!videoNome) {
             return;
         }
 
-        videoAtual = videoUrl;
-        mostrarPlayerVideo();
-        atualizarStatus('Preparando gravação para reprodução...', 'player-status-info');
-        carregarVideo(videoUrl);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        reproduzirVideo(videoNome);
     });
 
     async function carregarStatusCamera() {
