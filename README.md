@@ -146,7 +146,7 @@ export NVRBOX_TESTAR_RTSP_CADASTRO=0
 - `NVRBOX_GRAVACOES`: forca o caminho de gravacao.
 - `NVRBOX_CAMERAS`: muda o arquivo JSON de cameras.
 - `NVRBOX_LIMITE_DISCO`: limite de uso do disco para limpeza automatica, padrao `90`.
-- `NVRBOX_TEMPO_SEGMENTO`: duracao de cada segmento em segundos, padrao `600`.
+- `NVRBOX_TEMPO_SEGMENTO`: duracao de cada segmento em segundos, padrao `600`. Quando definida, tem prioridade sobre a escolha feita no painel.
 - `NVRBOX_RTSP_TRANSPORTE`: transporte padrao `udp` ou `tcp`, padrao `udp`.
 - `NVRBOX_TESTAR_RTSP_CADASTRO`: liga/desliga o teste RTSP no cadastro, padrao `1`.
 - `NVRBOX_TIMEOUT_TESTE_RTSP`: tempo maximo do teste RTSP em segundos, padrao `8`.

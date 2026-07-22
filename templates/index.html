@@ -59,6 +59,23 @@
                 <span>{{ total_cams - online_count }}</span>
             </div>
         </div>
+        <div class="stat-card segment-card">
+            <i class="ph ph-clock-countdown stat-icon"></i>
+            <div class="stat-info segment-info">
+                <h4>Segmentos</h4>
+                <form action="{{ url_for('configurar_segmento') }}" method="POST" class="segment-form">
+                    <select name="tempo_segmento">
+                        {% for tempo in tempos_segmento_permitidos %}
+                        <option value="{{ tempo }}" {% if tempo_segmento == tempo %}selected{% endif %}>
+                            {{ tempo // 60 }} min
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit">Usar</button>
+                </form>
+                <div class="segment-note">Aplica no próximo ciclo da captura</div>
+            </div>
+        </div>
     </div>
 
     <div class="add-section">

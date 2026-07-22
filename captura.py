@@ -7,9 +7,9 @@ import time
 from config import (
     FFMPEG_LOG_MAX_BYTES,
     RTSP_TRANSPORTE_PADRAO,
-    TEMPO_SEGMENTO,
     carregar_cameras,
     get_caminho_videos,
+    get_tempo_segmento,
     garantir_diretorios,
     mascarar_rtsp,
     slug_camera,
@@ -32,7 +32,7 @@ def rotacionar_log(caminho_log):
         print(f"[!] Nao foi possivel rotacionar log {caminho_log}: {erro}", flush=True)
 
 
-def iniciar_ffmpeg(cam, caminho_videos):
+def iniciar_ffmpeg(cam, caminho_videos, tempo_segmento):
     url = cam['rtsp_url']
     slug = slug_camera(cam)
     transporte = cam.get('protocolo', RTSP_TRANSPORTE_PADRAO)
@@ -48,7 +48,7 @@ def iniciar_ffmpeg(cam, caminho_videos):
         '-c:v', 'copy',
         '-c:a', 'aac',
         '-f', 'segment',
-        '-segment_time', str(TEMPO_SEGMENTO),
+        '-segment_time', str(tempo_segmento),
         '-segment_format', 'mp4',
         '-segment_format_options', 'movflags=frag_keyframe+empty_moov+default_base_moof',
         '-strftime', '1',
@@ -57,13 +57,14 @@ def iniciar_ffmpeg(cam, caminho_videos):
     ]
     f_log = open(log_file, "w", encoding="utf-8")
     processo = subprocess.Popen(comando, stdout=subprocess.DEVNULL, stderr=f_log)
-    return {"processo": processo, "log": f_log, "assinatura": assinatura_camera(cam)}
+    return {"processo": processo, "log": f_log, "assinatura": assinatura_camera(cam, tempo_segmento)}
 
 
-def assinatura_camera(cam):
+def assinatura_camera(cam, tempo_segmento):
     return (
         cam.get('rtsp_url', ''),
         cam.get('protocolo', RTSP_TRANSPORTE_PADRAO),
+        tempo_segmento,
     )
 
 def encerrar_ffmpeg(registro):
@@ -96,6 +97,7 @@ if __name__ == '__main__':
     while True:
         try:
             novo_caminho = get_caminho_videos()
+            tempo_segmento = get_tempo_segmento()
             garantir_diretorios(novo_caminho)
             if caminho_atual != novo_caminho:
                 if caminho_atual is not None:
@@ -118,7 +120,7 @@ if __name__ == '__main__':
                 nome = cam['nome']
                 slug = slug_camera(cam)
                 registro = processos.get(slug)
-                assinatura = assinatura_camera(cam)
+                assinatura = assinatura_camera(cam, tempo_segmento)
                 if registro and registro["processo"].poll() is not None:
                     registro["log"].close()
                     processos.pop(slug)
@@ -128,7 +130,7 @@ if __name__ == '__main__':
 
                 if slug not in processos:
                     print(f"[!] Iniciando captura: {nome} -> {mascarar_rtsp(cam['rtsp_url'])}", flush=True)
-                    processos[slug] = iniciar_ffmpeg(cam, caminho_atual)
+                    processos[slug] = iniciar_ffmpeg(cam, caminho_atual, tempo_segmento)
         except Exception as e:
             print(f"Erro no Watchdog: {e}")
         time.sleep(30)

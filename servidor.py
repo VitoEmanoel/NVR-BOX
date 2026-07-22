@@ -16,11 +16,14 @@ from config import (
     RTSP_PERFIS,
     RTSP_TRANSPORTE_PADRAO,
     TESTAR_RTSP_CADASTRO,
+    TEMPOS_SEGMENTO_PERMITIDOS,
     TIMEOUT_TESTE_RTSP,
     carregar_cameras,
     construir_rtsp_url,
     definir_armazenamento,
+    definir_tempo_segmento,
     get_caminho_videos,
+    get_tempo_segmento,
     garantir_diretorios,
     gerar_slug,
     listar_armazenamentos,
@@ -564,6 +567,8 @@ def montar_contexto_index():
         "perfis_rtsp": RTSP_PERFIS,
         "caminho_videos": caminho_videos,
         "armazenamentos": listar_armazenamentos(),
+        "tempo_segmento": get_tempo_segmento(),
+        "tempos_segmento_permitidos": TEMPOS_SEGMENTO_PERMITIDOS,
     }
 
 
@@ -797,6 +802,16 @@ def configurar_armazenamento():
         return renderizar_index(mensagem_erro=erro, status=400)
     garantir_diretorios(get_caminho_videos())
     return redirect(url_for('index', sucesso="Armazenamento atualizado."))
+
+
+@app.route('/configurar_segmento', methods=['POST'])
+def configurar_segmento():
+    tempo_segmento = request.form.get('tempo_segmento', '')
+    ok, erro = definir_tempo_segmento(tempo_segmento)
+    if not ok:
+        return renderizar_index(mensagem_erro=erro, status=400)
+    minutos = int(tempo_segmento) // 60
+    return redirect(url_for('index', sucesso=f"Segmentos configurados para {minutos} minutos."))
 
 @app.route('/download/<filename>')
 def download_video(filename):

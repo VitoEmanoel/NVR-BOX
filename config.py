@@ -18,6 +18,8 @@ RAIZES_ARMAZENAMENTO_EXTERNO = ("/media", "/mnt", "/storage", "/run/media")
 CAMINHOS_ARMAZENAMENTO_FIXOS = ("/sdcard", "/storage/emulated/0", "/storage/self/primary")
 NOMES_IGNORADOS_ARMAZENAMENTO = {"self", "runtime", "tmp", "tmpfs"}
 VALORES_VERDADEIROS = {"1", "true", "yes", "sim", "on"}
+TEMPOS_SEGMENTO_PERMITIDOS = (300, 600, 900)
+TEMPO_SEGMENTO_PADRAO = 600
 
 
 def env_bool(nome, padrao=False):
@@ -220,9 +222,43 @@ def definir_armazenamento(caminho_gravacoes):
     return True, None
 
 
+def get_tempo_segmento():
+    tempo_env = os.environ.get("NVRBOX_TEMPO_SEGMENTO")
+    if tempo_env:
+        try:
+            return int(tempo_env)
+        except ValueError:
+            return TEMPO_SEGMENTO_PADRAO
+
+    configuracoes = carregar_configuracoes()
+    try:
+        tempo = int(configuracoes.get("tempo_segmento", TEMPO_SEGMENTO_PADRAO))
+    except (TypeError, ValueError):
+        tempo = TEMPO_SEGMENTO_PADRAO
+
+    if tempo not in TEMPOS_SEGMENTO_PERMITIDOS:
+        return TEMPO_SEGMENTO_PADRAO
+    return tempo
+
+
+def definir_tempo_segmento(tempo_segmento):
+    try:
+        tempo_segmento = int(tempo_segmento)
+    except (TypeError, ValueError):
+        return False, "Tempo de segmento invalido."
+
+    if tempo_segmento not in TEMPOS_SEGMENTO_PERMITIDOS:
+        return False, "Escolha 5, 10 ou 15 minutos."
+
+    configuracoes = carregar_configuracoes()
+    configuracoes["tempo_segmento"] = tempo_segmento
+    salvar_configuracoes(configuracoes)
+    return True, None
+
+
 CAMINHO_VIDEOS = get_caminho_videos()
 LIMITE_USO_PORCENTAGEM = int(os.environ.get("NVRBOX_LIMITE_DISCO", "90"))
-TEMPO_SEGMENTO = int(os.environ.get("NVRBOX_TEMPO_SEGMENTO", "600"))
+TEMPO_SEGMENTO = get_tempo_segmento()
 RTSP_TRANSPORTE_PADRAO = os.environ.get("NVRBOX_RTSP_TRANSPORTE", "udp")
 TESTAR_RTSP_CADASTRO = env_bool("NVRBOX_TESTAR_RTSP_CADASTRO", True)
 TIMEOUT_TESTE_RTSP = int(os.environ.get("NVRBOX_TIMEOUT_TESTE_RTSP", "8"))

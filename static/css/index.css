@@ -119,18 +119,21 @@ body {
     min-width: 0;
 }
 
-.storage-info {
+.storage-info,
+.segment-info {
     min-width: 0;
 }
 
-.storage-form {
+.storage-form,
+.segment-form {
     display: flex;
     gap: 8px;
     margin-top: 6px;
     min-width: 0;
 }
 
-.storage-form select {
+.storage-form select,
+.segment-form select {
     min-width: 0;
     flex: 1;
     background: #0f172a;
@@ -140,7 +143,8 @@ body {
     border-radius: 8px;
 }
 
-.storage-form button {
+.storage-form button,
+.segment-form button {
     background: var(--blue-ui);
     border: none;
     color: white;
@@ -148,6 +152,16 @@ body {
     border-radius: 8px;
     cursor: pointer;
     font-weight: bold;
+}
+
+.segment-card {
+    min-width: 0;
+}
+
+.segment-note {
+    color: var(--text-dim);
+    font-size: 0.7rem;
+    margin-top: 4px;
 }
 
 .storage-path {

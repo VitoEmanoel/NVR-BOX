@@ -52,7 +52,7 @@ O sistema continua sem tela de login por enquanto, pois o uso previsto e em rede
   - Permitir clicar no dia para filtrar a lista.
   - Manter filtro por data simples como fallback.
 
-- [ ] Permitir escolher o tempo dos segmentos pelo painel.
+- [x] Permitir escolher o tempo dos segmentos pelo painel.
   - Opcoes iniciais: 5, 10 e 15 minutos.
   - Salvar escolha em `sistema.json`.
   - Fazer `captura.py` detectar alteracao e reiniciar FFmpeg para aplicar o novo tempo.

@@ -136,7 +136,7 @@ Cada camera cadastrada recebe um processo FFmpeg proprio. O nome dos arquivos us
 camera_slug_YYYY-MM-DD_HH-MM-SS.mp4
 ```
 
-Por padrao, cada segmento tem duracao alvo de 600 segundos, ou 10 minutos. Esse valor pode ser alterado pela variavel de ambiente `NVRBOX_TEMPO_SEGMENTO`.
+Por padrao, cada segmento tem duracao alvo de 600 segundos, ou 10 minutos. O painel permite escolher segmentos de 5, 10 ou 15 minutos. Esse valor tambem pode ser alterado pela variavel de ambiente `NVRBOX_TEMPO_SEGMENTO`, que tem prioridade sobre a escolha salva no painel.
 
 O FFmpeg usa:
 
