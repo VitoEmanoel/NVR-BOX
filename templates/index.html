@@ -10,10 +10,13 @@
 <body>
 
 <div class="container">
-    <header>
-        <p><i class="ph ph-shield-check"></i> Monitoramento residencial seguro</p>
-        <h1>Painel de Segurança NVRBOX</h1>
-        <p>Visão centralizada das câmeras e status operacional.</p>
+    <header class="page-header">
+        <div>
+            <p><i class="ph ph-shield-check"></i> Monitoramento residencial seguro</p>
+            <h1>Painel de Segurança NVRBOX</h1>
+            <p>Visão centralizada das câmeras e status operacional.</p>
+        </div>
+        <a href="{{ url_for('monitor_cameras') }}" class="btn-monitor"><i class="ph ph-squares-four"></i> Ver todas</a>
     </header>
 
     <div class="stats-grid">

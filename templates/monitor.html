@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mosaico ao vivo | NVRBox</title>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/monitor.css') }}">
+</head>
+<body>
+
+<div class="container">
+    <header class="header-nav">
+        <div>
+            <h1>Mosaico ao vivo</h1>
+            <span>{{ cameras|length }} câmeras cadastradas</span>
+        </div>
+        <div class="header-actions">
+            <button type="button" class="btn-control" id="btn-toggle"><i class="ph ph-pause"></i> Pausar</button>
+            <a href="{{ url_for('index') }}" class="btn-back"><i class="ph ph-arrow-left"></i> Voltar ao painel</a>
+        </div>
+    </header>
+
+    {% if not cameras %}
+    <div class="empty-state">
+        <i class="ph ph-video-camera-slash"></i>
+        <span>Nenhuma câmera cadastrada.</span>
+    </div>
+    {% endif %}
+
+    <div class="monitor-grid" id="monitor-grid">
+        {% for camera in cameras %}
+        <section
+            class="monitor-card"
+            data-camera-card
+            data-live-url="{{ url_for('live_stream', slug=camera.slug) }}"
+            data-status-url="{{ url_for('api_camera_status', slug=camera.slug) }}"
+        >
+            <div class="monitor-frame">
+                <img class="monitor-feed" alt="{{ camera.nome }}" data-camera-feed hidden>
+                <div class="monitor-placeholder" data-camera-placeholder>
+                    <i class="ph ph-spinner-gap loading-spin"></i>
+                    <span>Carregando...</span>
+                </div>
+                <a class="open-camera" href="{{ url_for('detalhe_camera', slug=camera.slug) }}" title="Abrir câmera">
+                    <i class="ph ph-corners-out"></i>
+                </a>
+            </div>
+            <footer>
+                <strong>{{ camera.nome }}</strong>
+                <span class="camera-state" data-camera-state>Verificando</span>
+            </footer>
+        </section>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+    const cards = Array.from(document.querySelectorAll('[data-camera-card]'));
+    const btnToggle = document.getElementById('btn-toggle');
+    let mosaicoAtivo = true;
+
+    function definirPlaceholder(card, icone, texto, classe = '') {
+        const placeholder = card.querySelector('[data-camera-placeholder]');
+        const state = card.querySelector('[data-camera-state]');
+        placeholder.hidden = false;
+        placeholder.className = `monitor-placeholder ${classe}`;
+        placeholder.innerHTML = `<i class="ph ${icone}"></i><span>${texto}</span>`;
+        state.textContent = texto;
+        state.className = `camera-state ${classe}`;
+    }
+
+    function pararCamera(card) {
+        const feed = card.querySelector('[data-camera-feed]');
+        feed.hidden = true;
+        feed.removeAttribute('src');
+        definirPlaceholder(card, 'ph-pause-circle', 'Pausada', 'state-paused');
+    }
+
+    async function carregarCamera(card) {
+        const feed = card.querySelector('[data-camera-feed]');
+        const placeholder = card.querySelector('[data-camera-placeholder]');
+        definirPlaceholder(card, 'ph-spinner-gap loading-spin', 'Carregando...', '');
+        feed.hidden = true;
+        feed.removeAttribute('src');
+
+        try {
+            const resposta = await fetch(card.dataset.statusUrl, { cache: 'no-store' });
+            if (!resposta.ok) {
+                throw new Error('status');
+            }
+
+            const dados = await resposta.json();
+            if (!dados.online) {
+                definirPlaceholder(card, 'ph-video-camera-slash', 'Offline', 'state-offline');
+                return;
+            }
+
+            feed.onload = () => {
+                placeholder.hidden = true;
+                feed.hidden = false;
+                const state = card.querySelector('[data-camera-state]');
+                state.textContent = 'Online';
+                state.className = 'camera-state state-online';
+            };
+            feed.onerror = () => {
+                feed.hidden = true;
+                feed.removeAttribute('src');
+                placeholder.hidden = false;
+                definirPlaceholder(card, 'ph-warning', 'Falha no ao vivo', 'state-offline');
+            };
+            placeholder.hidden = false;
+            feed.src = dados.live_url || card.dataset.liveUrl;
+        } catch (_erro) {
+            definirPlaceholder(card, 'ph-warning', 'Indisponível', 'state-offline');
+        }
+    }
+
+    function carregarMosaico() {
+        mosaicoAtivo = true;
+        btnToggle.innerHTML = '<i class="ph ph-pause"></i> Pausar';
+        cards.forEach(carregarCamera);
+    }
+
+    function pausarMosaico() {
+        mosaicoAtivo = false;
+        btnToggle.innerHTML = '<i class="ph ph-play"></i> Retomar';
+        cards.forEach(pararCamera);
+    }
+
+    btnToggle.addEventListener('click', () => {
+        if (mosaicoAtivo) {
+            pausarMosaico();
+            return;
+        }
+        carregarMosaico();
+    });
+
+    window.addEventListener('beforeunload', () => {
+        cards.forEach((card) => {
+            const feed = card.querySelector('[data-camera-feed]');
+            feed.removeAttribute('src');
+        });
+    });
+
+    carregarMosaico();
+</script>
+
+</body>
+</html>

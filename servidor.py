@@ -527,6 +527,14 @@ def detalhe_camera(slug):
     )
 
 
+@app.route('/monitor')
+def monitor_cameras():
+    cameras = carregar_cameras()
+    for camera in cameras:
+        camera['slug'] = slug_camera(camera)
+    return render_template('monitor.html', cameras=cameras)
+
+
 def renderizar_detalhe_camera(
     slug,
     mensagem_erro=None,

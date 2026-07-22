@@ -1,0 +1,230 @@
+:root {
+    --bg: #030712;
+    --card: #111827;
+    --border: #1f2937;
+    --text-main: #f3f4f6;
+    --text-dim: #9ca3af;
+    --success: #10b981;
+    --danger: #ef4444;
+    --blue-ui: #3b82f6;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    background: var(--bg);
+    color: var(--text-main);
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+    margin: 0;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1500px;
+    margin: auto;
+}
+
+.header-nav {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    justify-content: space-between;
+    margin-bottom: 18px;
+}
+
+.header-nav h1 {
+    font-size: 1.4rem;
+    margin: 0;
+}
+
+.header-nav span {
+    color: var(--text-dim);
+    font-size: 0.82rem;
+}
+
+.header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.btn-control,
+.btn-back {
+    align-items: center;
+    border: 0;
+    border-radius: 8px;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    font-size: 0.9rem;
+    font-weight: bold;
+    gap: 8px;
+    min-height: 40px;
+    padding: 10px 14px;
+    text-decoration: none;
+}
+
+.btn-control {
+    background: var(--blue-ui);
+}
+
+.btn-back {
+    background: #1f2937;
+}
+
+.monitor-grid {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.monitor-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.monitor-frame {
+    aspect-ratio: 16 / 9;
+    background: #000;
+    position: relative;
+}
+
+.monitor-feed {
+    height: 100%;
+    object-fit: contain;
+    width: 100%;
+}
+
+.monitor-feed[hidden],
+.monitor-placeholder[hidden] {
+    display: none;
+}
+
+.monitor-placeholder {
+    align-items: center;
+    background: #020617;
+    color: var(--text-dim);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    height: 100%;
+    justify-content: center;
+    padding: 16px;
+    text-align: center;
+    width: 100%;
+}
+
+.monitor-placeholder i {
+    font-size: 2.4rem;
+}
+
+.open-camera {
+    align-items: center;
+    background: rgba(0, 0, 0, 0.55);
+    border-radius: 6px;
+    color: white;
+    display: flex;
+    height: 34px;
+    justify-content: center;
+    position: absolute;
+    right: 10px;
+    text-decoration: none;
+    top: 10px;
+    width: 34px;
+}
+
+.monitor-card footer {
+    align-items: center;
+    display: flex;
+    gap: 10px;
+    justify-content: space-between;
+    min-height: 52px;
+    padding: 12px;
+}
+
+.monitor-card strong {
+    font-size: 0.95rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.camera-state {
+    border-radius: 999px;
+    color: var(--text-dim);
+    flex: 0 0 auto;
+    font-size: 0.72rem;
+    font-weight: bold;
+    padding: 5px 8px;
+    text-transform: uppercase;
+}
+
+.state-online {
+    background: rgba(16, 185, 129, 0.14);
+    color: var(--success);
+}
+
+.state-offline {
+    background: rgba(239, 68, 68, 0.14);
+    color: #fecaca;
+}
+
+.state-paused {
+    background: rgba(59, 130, 246, 0.14);
+    color: #bfdbfe;
+}
+
+.empty-state {
+    align-items: center;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-dim);
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    min-height: 160px;
+}
+
+.empty-state i {
+    color: var(--danger);
+    font-size: 2rem;
+}
+
+.loading-spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (max-width: 700px) {
+    body {
+        padding: 12px;
+    }
+
+    .header-actions,
+    .btn-control,
+    .btn-back {
+        width: 100%;
+    }
+
+    .btn-control,
+    .btn-back {
+        justify-content: center;
+    }
+
+    .monitor-grid {
+        grid-template-columns: 1fr;
+    }
+}

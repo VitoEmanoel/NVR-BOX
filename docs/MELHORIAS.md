@@ -21,12 +21,12 @@ O sistema continua sem tela de login por enquanto, pois o uso previsto e em rede
   - Mostrar a duracao completa obtida por `ffprobe`.
   - Manter cache em memoria para metadados dos videos; cache persistente de WebM fica para depois se o fallback ainda pesar em hardware fraco.
 
-- [ ] Criar tela de mosaico para ver todas as cameras ao vivo.
+- [x] Criar tela de mosaico para ver todas as cameras ao vivo.
   - Adicionar botao `Ver todas` no painel principal.
   - Mostrar grade responsiva com todas as cameras.
   - Exibir nome e status em cada camera.
   - Clicar em uma camera deve abrir a tela individual.
-  - Ter cuidado com consumo de CPU, pois cada live view pode abrir um FFmpeg.
+  - Adicionar pausa/retomada geral para fechar os streams quando o mosaico nao estiver em uso.
 
 - [ ] Adicionar exclusao manual de gravacoes.
   - Apagar um video especifico.
