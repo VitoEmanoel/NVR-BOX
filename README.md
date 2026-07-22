@@ -158,6 +158,7 @@ Antes de considerar uma alteracao concluida, rode:
 
 ```bash
 python3 -m py_compile servidor.py captura.py limpeza.py config.py
+python3 -m unittest
 python3 -m json.tool cameras.example.json
 test ! -f cameras.local.json || python3 -m json.tool cameras.local.json
 bash -n iniciar_nvr.sh

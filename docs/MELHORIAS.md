@@ -36,14 +36,14 @@ O sistema continua sem tela de login por enquanto, pois o uso previsto e em rede
   - Permitir apagar apenas arquivos `.mp4` dentro da pasta de gravacoes ativa.
   - Para apagar todos de uma camera, limitar aos arquivos que comecam com o slug da camera e preservar arquivos recentes ou em gravacao.
 
-- [ ] Reforcar e testar a limpeza automatica.
+- [x] Reforcar e testar a limpeza automatica.
   - Confirmar que apaga quando o disco passa do limite configurado.
   - Confirmar que o padrao de 90% funciona.
   - Confirmar que remove primeiro os videos mais antigos.
   - Confirmar que preserva videos novos e segmentos em gravacao.
   - Garantir que a limpeza so atua dentro da pasta de gravacoes ativa.
   - Garantir que a limpeza so apaga arquivos `.mp4`.
-  - Registrar no painel ou em log claro o que foi apagado.
+  - Registrar em log claro o que foi apagado e cobrir o comportamento com testes automatizados.
 
 - [ ] Criar calendario interativo de gravacoes.
   - Mostrar dias com gravacoes.
