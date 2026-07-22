@@ -38,6 +38,7 @@ garantir_diretorios()
 print(f"Sistema rodando! Gravando em: {get_caminho_videos()}")
 
 MAC_REGEX = re.compile(r"^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$")
+DATA_VIDEO_REGEX = re.compile(r"^(\d{4}-\d{2}-\d{2})_\d{2}-\d{2}-\d{2}\.mp4$")
 VIDEO_INFO_CACHE = {}
 IDADE_MINIMA_EXCLUSAO_VIDEO = 60
 
@@ -115,7 +116,10 @@ def verificar_online(url):
 def contar_arquivos(slug_camera):
     try:
         caminho_videos = get_caminho_videos()
-        arquivos = [f for f in os.listdir(caminho_videos) if f.startswith(slug_camera) and f.endswith('.mp4')]
+        arquivos = [
+            f for f in os.listdir(caminho_videos)
+            if nome_video_pertence_camera(f, slug_camera)
+        ]
         return len(arquivos)
     except OSError:
         return 0
@@ -189,20 +193,56 @@ def obter_info_video(caminho_videos, nome_arquivo):
     return info
 
 
+def nome_video_pertence_camera(nome_arquivo, slug_fixo):
+    return extrair_data_video(nome_arquivo, slug_fixo) is not None
+
+
+def extrair_data_video(nome_arquivo, slug_fixo):
+    prefixo = f"{slug_fixo}_"
+    if not nome_arquivo.startswith(prefixo):
+        return None
+
+    match = DATA_VIDEO_REGEX.match(nome_arquivo[len(prefixo):])
+    if not match:
+        return None
+    return match.group(1)
+
+
 def listar_videos_camera(caminho_videos, slug_fixo, data_filtro=""):
     try:
         nomes = [
             f for f in os.listdir(caminho_videos)
-            if f.startswith(slug_fixo) and f.endswith('.mp4')
+            if nome_video_pertence_camera(f, slug_fixo)
         ]
     except OSError:
         return []
 
     if data_filtro:
-        nomes = [f for f in nomes if data_filtro in f]
+        nomes = [f for f in nomes if extrair_data_video(f, slug_fixo) == data_filtro]
 
     nomes.sort(reverse=True)
     return [obter_info_video(caminho_videos, nome) for nome in nomes]
+
+
+def listar_dias_gravacoes_camera(caminho_videos, slug_fixo):
+    dias = {}
+    try:
+        nomes = os.listdir(caminho_videos)
+    except OSError:
+        return []
+
+    for nome in nomes:
+        if not nome_video_pertence_camera(nome, slug_fixo):
+            continue
+        data_video = extrair_data_video(nome, slug_fixo)
+        if not data_video:
+            continue
+        dias[data_video] = dias.get(data_video, 0) + 1
+
+    return [
+        {"data": data, "total": total}
+        for data, total in sorted(dias.items(), reverse=True)
+    ]
 
 
 def obter_caminho_video_seguro(filename):
@@ -222,10 +262,6 @@ def obter_caminho_video_seguro(filename):
         return None
 
     return caminho_video
-
-
-def nome_video_pertence_camera(nome_arquivo, slug_fixo):
-    return nome_arquivo.startswith(f"{slug_fixo}_") and nome_arquivo.endswith(".mp4")
 
 
 def video_pode_ser_excluido(caminho_video):
@@ -678,6 +714,19 @@ def api_camera_videos(slug):
         "videos_validos": videos_validos,
         "total_videos": len(videos),
     })
+
+
+@app.route('/api/camera/<slug>/calendario')
+def api_camera_calendario(slug):
+    cameras = carregar_cameras()
+    camera = buscar_camera_por_slug(cameras, slug)
+    if not camera:
+        return jsonify({"erro": "Camera nao encontrada"}), 404
+
+    caminho_videos = get_caminho_videos()
+    dias = listar_dias_gravacoes_camera(caminho_videos, slug_camera(camera))
+    return jsonify({"dias": dias})
+
 
 @app.route('/video/<filename>')
 def serve_video(filename):

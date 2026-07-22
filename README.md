@@ -23,6 +23,7 @@ Sem essas duas variaveis, o painel continua sem login para manter o uso local si
 - Gravacao por FFmpeg em segmentos `.mp4`.
 - Segmentos `.mp4` fragmentados para preservar reproducao mesmo em paradas antes dos 10 minutos.
 - Historico de gravacoes por camera.
+- Calendario interativo de gravacoes por camera, com contador por dia.
 - Filtro por data.
 - Reproducao de gravacoes no proprio painel.
 - Acoes explicitas de player e download na lista de gravacoes.
@@ -97,7 +98,7 @@ Ao trocar a memoria pelo painel, a captura reinicia os processos FFmpeg para gra
 
 O painel principal mostra as cameras cadastradas, o status online/offline e a quantidade de gravacoes por camera. Para ver o video ao vivo, abra a camera pelo botao `Abrir Camera`; o stream MJPEG e carregado na tela de detalhe.
 
-Na tela da camera, a lista `Gravacoes` mostra os arquivos encontrados no armazenamento ativo. Use o filtro de data para buscar um dia especifico e clique em uma gravacao valida para reproduzir no player. Ao abrir uma gravacao, o painel interrompe o stream ao vivo, mostra o player de video e usa uma rota compativel com navegador (`/video_compativel/<arquivo>`) para converter o trecho sob demanda para WebM quando necessario. O download continua entregando o arquivo `.mp4` original.
+Na tela da camera, a lista `Gravacoes` mostra os arquivos encontrados no armazenamento ativo. O calendario destaca dias com gravacoes, mostra a quantidade de videos por dia e permite clicar em uma data para filtrar a lista. O filtro manual por data continua disponivel como fallback. Ao abrir uma gravacao, o painel interrompe o stream ao vivo, mostra o player de video e usa uma rota compativel com navegador (`/video_compativel/<arquivo>`) para converter o trecho sob demanda para WebM quando necessario. O download continua entregando o arquivo `.mp4` original.
 
 Arquivos antigos ou interrompidos antes desta versao podem aparecer como incompletos se nao puderem ser lidos pelo `ffprobe`.
 

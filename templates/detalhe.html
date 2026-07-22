@@ -114,9 +114,23 @@
                 >
                     <button type="submit" class="btn-delete-all"><i class="ph ph-trash"></i> Apagar todas</button>
                 </form>
-                <form class="filter-box" id="video-filter-form">
-                    <input type="date" name="data" value="{{ data_filtro }}">
-                    <button type="submit" class="btn-filter"><i class="ph ph-magnifying-glass"></i></button>
+                <div class="recording-calendar is-collapsed" id="recording-calendar" aria-label="Calendário de gravações">
+                    <div class="calendar-toolbar">
+                        <button type="button" class="calendar-nav" id="calendar-prev" title="Mês anterior">
+                            <i class="ph ph-caret-left"></i>
+                        </button>
+                        <strong id="calendar-month-label">--</strong>
+                        <button type="button" class="calendar-toggle" id="calendar-toggle" title="Abrir calendário">
+                            <i class="ph ph-calendar-dots"></i>
+                        </button>
+                        <button type="button" class="calendar-nav" id="calendar-next" title="Próximo mês">
+                            <i class="ph ph-caret-right"></i>
+                        </button>
+                    </div>
+                    <div class="calendar-grid" id="recording-calendar-grid" aria-live="polite"></div>
+                </div>
+                <form id="video-filter-form" hidden>
+                    <input type="hidden" name="data" value="{{ data_filtro }}">
                 </form>
             </div>
             <div class="video-list" id="video-list">
@@ -156,13 +170,29 @@
     const videoTotal = document.getElementById('video-total');
     const videoList = document.getElementById('video-list');
     const videoFilterForm = document.getElementById('video-filter-form');
+    const videoDateInput = videoFilterForm.querySelector('input[name="data"]');
+    const recordingCalendar = document.getElementById('recording-calendar');
+    const calendarGrid = document.getElementById('recording-calendar-grid');
+    const calendarMonthLabel = document.getElementById('calendar-month-label');
+    const calendarPrev = document.getElementById('calendar-prev');
+    const calendarNext = document.getElementById('calendar-next');
+    const calendarToggle = document.getElementById('calendar-toggle');
     const videoOriginalUrl = "{{ url_for('serve_video', filename='__FILENAME__') }}";
     const videoCompativelUrl = "{{ url_for('serve_video_compativel', filename='__FILENAME__') }}";
     const downloadVideoUrl = "{{ url_for('download_video', filename='__FILENAME__') }}";
     const apagarVideoUrl = "{{ url_for('apagar_video', slug=camera.slug, filename='__FILENAME__') }}";
     const cameraStatusUrl = "{{ url_for('api_camera_status', slug=camera.slug) }}";
     const cameraVideosUrl = "{{ url_for('api_camera_videos', slug=camera.slug) }}";
+    const cameraCalendarUrl = "{{ url_for('api_camera_calendario', slug=camera.slug) }}";
+    const nomesDiasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    const nomesMeses = [
+        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
     let videoAtual = null;
+    let diasComGravacao = new Map();
+    let mesCalendario = new Date();
+    mesCalendario = new Date(mesCalendario.getFullYear(), mesCalendario.getMonth(), 1);
 
     function montarUrl(baseUrl, filename) {
         return baseUrl.replace('__FILENAME__', encodeURIComponent(filename));
@@ -304,6 +334,116 @@
 
     function criarMetaVideo(video) {
         return video.duracao ? `${video.duracao} · ${video.tamanho}` : video.tamanho;
+    }
+
+    function criarDataLocal(valor) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(valor || '')) {
+            return null;
+        }
+        const [ano, mes, dia] = valor.split('-').map(Number);
+        const data = new Date(ano, mes - 1, dia);
+        if (
+            data.getFullYear() !== ano ||
+            data.getMonth() !== mes - 1 ||
+            data.getDate() !== dia
+        ) {
+            return null;
+        }
+        return data;
+    }
+
+    function formatarDataIso(data) {
+        const ano = data.getFullYear();
+        const mes = String(data.getMonth() + 1).padStart(2, '0');
+        const dia = String(data.getDate()).padStart(2, '0');
+        return `${ano}-${mes}-${dia}`;
+    }
+
+    function sincronizarMesComFiltro() {
+        const dataFiltro = criarDataLocal(videoDateInput.value);
+        if (dataFiltro) {
+            mesCalendario = new Date(dataFiltro.getFullYear(), dataFiltro.getMonth(), 1);
+        }
+    }
+
+    function atualizarEstadoCalendario() {
+        const recolhido = recordingCalendar.classList.contains('is-collapsed');
+        calendarToggle.title = recolhido ? 'Abrir calendário' : 'Recolher calendário';
+        calendarToggle.setAttribute('aria-expanded', String(!recolhido));
+    }
+
+    function abrirCalendario() {
+        recordingCalendar.classList.remove('is-collapsed');
+        atualizarEstadoCalendario();
+    }
+
+    function recolherCalendario() {
+        recordingCalendar.classList.add('is-collapsed');
+        atualizarEstadoCalendario();
+    }
+
+    function renderizarCalendario() {
+        const ano = mesCalendario.getFullYear();
+        const mes = mesCalendario.getMonth();
+        const hojeIso = formatarDataIso(new Date());
+        const selecionado = videoDateInput.value;
+        const primeiroDia = new Date(ano, mes, 1).getDay();
+        const totalDias = new Date(ano, mes + 1, 0).getDate();
+        let html = nomesDiasSemana.map((dia) => `<span class="calendar-weekday">${dia}</span>`).join('');
+
+        calendarMonthLabel.textContent = `${nomesMeses[mes]} ${ano}`;
+
+        for (let vazio = 0; vazio < primeiroDia; vazio += 1) {
+            html += '<span class="calendar-empty"></span>';
+        }
+
+        for (let dia = 1; dia <= totalDias; dia += 1) {
+            const data = new Date(ano, mes, dia);
+            const dataIso = formatarDataIso(data);
+            const total = diasComGravacao.get(dataIso) || 0;
+            const classes = [
+                'calendar-day',
+                total ? 'calendar-day-recorded' : 'calendar-day-empty',
+                dataIso === selecionado ? 'calendar-day-selected' : '',
+                dataIso === hojeIso ? 'calendar-day-today' : '',
+            ].filter(Boolean).join(' ');
+            const titulo = total
+                ? `${total} gravação${total > 1 ? 'ões' : ''} em ${dataIso}`
+                : `Sem gravações em ${dataIso}`;
+
+            html += `
+                <button type="button" class="${classes}" data-date="${dataIso}" title="${titulo}">
+                    <span class="calendar-day-number">${dia}</span>
+                    <span class="calendar-day-count">${total || ''}</span>
+                </button>
+            `;
+        }
+
+        calendarGrid.innerHTML = html;
+    }
+
+    async function carregarCalendario() {
+        try {
+            const resposta = await fetch(cameraCalendarUrl, { cache: 'no-store' });
+            if (!resposta.ok) {
+                throw new Error('Falha ao carregar calendário');
+            }
+
+            const dados = await resposta.json();
+            const dias = dados.dias || [];
+            diasComGravacao = new Map(dias.map((dia) => [dia.data, Number(dia.total) || 0]));
+            sincronizarMesComFiltro();
+            if (!videoDateInput.value && dias.length) {
+                const dataMaisRecente = criarDataLocal(dias[0].data);
+                if (dataMaisRecente) {
+                    mesCalendario = new Date(dataMaisRecente.getFullYear(), dataMaisRecente.getMonth(), 1);
+                }
+            }
+            renderizarCalendario();
+        } catch (_erro) {
+            calendarMonthLabel.textContent = 'Calendário';
+            calendarGrid.innerHTML = '<div class="calendar-error">Não foi possível carregar o calendário.</div>';
+        }
     }
 
     function renderizarVideos(videos) {
@@ -476,10 +616,42 @@
     perfilEditar.addEventListener('change', alternarCaminhoManualEdicao);
     videoFilterForm.addEventListener('submit', (event) => {
         event.preventDefault();
+        sincronizarMesComFiltro();
+        renderizarCalendario();
         carregarListaVideos();
     });
+    calendarGrid.addEventListener('click', (event) => {
+        if (!(event.target instanceof Element)) {
+            return;
+        }
+        const dia = event.target.closest('.calendar-day');
+        if (!dia) {
+            return;
+        }
+        videoDateInput.value = dia.dataset.date;
+        sincronizarMesComFiltro();
+        renderizarCalendario();
+        recolherCalendario();
+        carregarListaVideos();
+    });
+    calendarPrev.addEventListener('click', () => {
+        abrirCalendario();
+        mesCalendario = new Date(mesCalendario.getFullYear(), mesCalendario.getMonth() - 1, 1);
+        renderizarCalendario();
+    });
+    calendarNext.addEventListener('click', () => {
+        abrirCalendario();
+        mesCalendario = new Date(mesCalendario.getFullYear(), mesCalendario.getMonth() + 1, 1);
+        renderizarCalendario();
+    });
+    calendarToggle.addEventListener('click', () => {
+        recordingCalendar.classList.toggle('is-collapsed');
+        atualizarEstadoCalendario();
+    });
+    atualizarEstadoCalendario();
     alternarCaminhoManualEdicao();
     carregarStatusCamera();
+    carregarCalendario();
     carregarListaVideos();
 </script>
 

@@ -25,6 +25,7 @@ As principais entregas atuais sao:
 - Segmentacao das gravacoes em arquivos `.mp4`.
 - Segmentos MP4 fragmentados para melhorar a reproducao de arquivos gerados em paradas curtas ou interrupcoes.
 - Historico de gravacoes por camera.
+- Calendario interativo por camera com contador de gravacoes por dia.
 - Filtro de gravacoes por data.
 - Validacao de gravacoes com `ffprobe`.
 - Separacao visual entre gravacoes reproduziveis e arquivos incompletos ou invalidos.
@@ -92,6 +93,7 @@ A tela de detalhe da camera apresenta:
 - Live view individual.
 - Botao para voltar ao ao vivo depois de abrir uma gravacao.
 - Lista de gravacoes.
+- Calendario de gravacoes com destaque para dias com videos salvos.
 - Filtro por data.
 - Acao `Player` para reproduzir uma gravacao.
 - Acao `Download` para baixar o `.mp4` original.

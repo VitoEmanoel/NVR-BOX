@@ -45,7 +45,7 @@ O sistema continua sem tela de login por enquanto, pois o uso previsto e em rede
   - Garantir que a limpeza so apaga arquivos `.mp4`.
   - Registrar em log claro o que foi apagado e cobrir o comportamento com testes automatizados.
 
-- [ ] Criar calendario interativo de gravacoes.
+- [x] Criar calendario interativo de gravacoes.
   - Mostrar dias com gravacoes.
   - Mostrar dias sem gravacoes.
   - Exibir quantidade de videos por dia.
