@@ -59,23 +59,6 @@ Observacao: o painel mostra as cameras como "online" porque a porta RTSP respond
 
 Problemas que causam perda de gravacao, perda de dados ou deixam o painel inutilizavel.
 
-- [ ] 4. Encontrar a camera sozinho quando o IP mudar (identificar pelo MAC, nao pelo IP).
-  - Sintoma relatado: quando falta energia ou o Wi-Fi reinicia, o roteador distribui os IPs de novo e as cameras podem trocar de IP entre si (ex.: camera 1 fica com o IP que era da camera 2 e vice-versa). O sistema continua usando o IP salvo, entao a gravacao da camera 2 vai para o nome da camera 1, e a pagina da camera 1 mostra a imagem da camera 2. Se o IP novo nao for de nenhuma camera cadastrada, a camera some.
-  - Causa: o IP fica fixo dentro da `rtsp_url` salva em `cameras.local.json`. O campo `mac` ja existe no cadastro, mas so e validado no formulario; nenhuma parte do sistema usa o MAC para achar ou conferir a camera.
-  - Requisito: tudo deve ser automatico. O usuario nao deve precisar de conhecimento tecnico, nem acessar o roteador ou outro sistema. Reserva de IP no roteador nao e solucao para este projeto.
-  - Solucao, toda dentro do NVRBox:
-    1. Cadastro sem digitar IP nem MAC: o painel procura as cameras na rede (descoberta ONVIF + varredura leve da porta RTSP) e mostra a lista das encontradas. O usuario escolhe a camera, da um nome e digita so a senha. O MAC e capturado automaticamente e salvo; o IP vira apenas "ultimo IP conhecido". Manter o cadastro manual por IP como opcao avancada.
-    2. Conferencia antes de gravar: antes de iniciar cada FFmpeg e a cada ciclo do watchdog, conferir se o IP salvo ainda pertence ao MAC da camera, lendo a tabela ARP (`/proc/net/arp` ou `ip neigh`). Se nao pertencer, nao gravar com aquele IP (evita gravacao trocada).
-    3. Busca automatica: se o MAC nao estiver no IP salvo, varrer a rede local de forma leve para achar o IP atual daquele MAC, atualizar o cadastro e remontar a `rtsp_url` sozinho. Nenhuma acao do usuario.
-    4. Onde a tabela ARP nao estiver disponivel (Android 10+/Termux), usar a descoberta ONVIF (WS-Discovery, multicast UDP `239.255.255.250:3702`) com o identificador unico de cada camera. Muitas cameras (Intelbras, Hikvision, Dahua, XM) respondem.
-  - Painel em linguagem simples: mostrar "Camera 1 mudou de endereco e foi reconectada automaticamente" ou "Camera 1 nao encontrada na rede. Verifique se ela esta ligada". Nunca pedir para o usuario configurar IP ou roteador. Registrar tambem no log e no estado do item 2.
-  - Cameras ja cadastradas sem MAC: preencher o MAC automaticamente na primeira vez que a camera responder no IP salvo, sem pedir nada ao usuario.
-  - Limitacoes a tratar:
-    - Descoberta e tabela ARP so funcionam com o NVR na mesma rede local das cameras (nao atravessam outro roteador nem Tailscale).
-    - Repetidores Wi-Fi que fazem "MAC NAT" podem mostrar o MAC do repetidor em vez do da camera; detectar MAC repetido em varias cameras e usar o identificador ONVIF nesse caso.
-    - A busca deve ser leve (so quando a camera sumir, com limite de tempo e sem varrer a rede o tempo todo), pensando em hardware simples.
-  - Teste: simular duas cameras trocando de IP e confirmar que cada gravacao continua no nome correto e que a pagina de cada camera mostra a camera certa.
-
 - [ ] 5. Deixar a lista de gravacoes rapida.
   - Sintoma relatado: os videos ja gravados demoram a aparecer no painel da camera.
   - Causa (**comprovado**): a tela da camera carrega por padrao a lista **sem filtro de data**, ou seja, todo o historico. Para cada arquivo roda um `ffprobe` em sequencia. Com 1500 videos a resposta levou 85 s.
@@ -208,6 +191,15 @@ Problemas que causam perda de gravacao, perda de dados ou deixam o painel inutil
   - A URL RTSP com senha aparece completa nos argumentos do FFmpeg (`ps`), visivel para qualquer usuario da maquina.
   - Avaliar passar credenciais de outra forma ou, no minimo, rodar o servico com um usuario proprio em vez de `root`.
 
+- [ ] 28. Cadastro escolhendo a camera numa lista, sem digitar IP.
+  - Parte restante do item 4. O painel procura as cameras na rede (varredura da porta RTSP com `rede.varrer_rede` e, quando possivel, descoberta ONVIF) e mostra a lista com o que encontrou; o usuario escolhe, da um nome e digita so a senha.
+  - Esconder as cameras ja cadastradas (pelo MAC) da lista.
+  - Manter o cadastro manual por IP como opcao avancada.
+
+- [ ] 29. Descoberta ONVIF para quando a tabela ARP nao estiver disponivel.
+  - Parte restante do item 4. No Android 10+ (Termux) `/proc/net/arp` e bloqueado, entao hoje a camera segue pelo IP salvo sem conferencia.
+  - Usar WS-Discovery (multicast UDP `239.255.255.250:3702`) e guardar o identificador unico de cada camera.
+
 ## Futuro
 
 - [ ] Avaliar Docker depois da base ficar robusta.
@@ -225,7 +217,7 @@ Problemas que causam perda de gravacao, perda de dados ou deixam o painel inutil
 ## Ordem recomendada de execucao
 
 1. ~~Gravacao travada e estado de gravacao (itens 1, 2 e 8)~~: concluido em 2026-09-24.
-2. Caminho de gravacao (item 3, concluido) e identificacao da camera por MAC (item 4): evitam gravar no lugar errado.
+2. ~~Caminho de gravacao e identificacao da camera por MAC (itens 3 e 4)~~: concluido em 2026-09-24.
 3. Lista de gravacoes rapida (item 5).
 4. Seguranca dos dados (itens 6 e 7).
 5. Correcoes rapidas (itens 9, 12 e 13).
@@ -245,6 +237,26 @@ Decisao do usuario (2026-09-24): nao corrigir nem renomear o historico atual. De
 - [ ] Acompanhar os primeiros dias: nenhuma camera parada, logs pequenos, lista de gravacoes abrindo rapido.
 
 ## Concluidas
+
+- [x] 4. Encontrar a camera sozinho quando o IP mudar (identificar pelo MAC, nao pelo IP).
+  - Sintoma relatado: quando falta energia ou o Wi-Fi reinicia, o roteador distribui os IPs de novo e as cameras podem trocar de IP entre si (ex.: camera 1 fica com o IP que era da camera 2 e vice-versa). O sistema continua usando o IP salvo, entao a gravacao da camera 2 vai para o nome da camera 1, e a pagina da camera 1 mostra a imagem da camera 2. Se o IP novo nao for de nenhuma camera cadastrada, a camera some.
+  - Causa: o IP fica fixo dentro da `rtsp_url` salva em `cameras.local.json`. O campo `mac` ja existe no cadastro, mas so e validado no formulario; nenhuma parte do sistema usa o MAC para achar ou conferir a camera.
+  - Requisito: tudo deve ser automatico. O usuario nao deve precisar de conhecimento tecnico, nem acessar o roteador ou outro sistema. Reserva de IP no roteador nao e solucao para este projeto.
+  - Solucao, toda dentro do NVRBox:
+    1. Cadastro sem digitar IP nem MAC: o painel procura as cameras na rede (descoberta ONVIF + varredura leve da porta RTSP) e mostra a lista das encontradas. O usuario escolhe a camera, da um nome e digita so a senha. O MAC e capturado automaticamente e salvo; o IP vira apenas "ultimo IP conhecido". Manter o cadastro manual por IP como opcao avancada.
+    2. Conferencia antes de gravar: antes de iniciar cada FFmpeg e a cada ciclo do watchdog, conferir se o IP salvo ainda pertence ao MAC da camera, lendo a tabela ARP (`/proc/net/arp` ou `ip neigh`). Se nao pertencer, nao gravar com aquele IP (evita gravacao trocada).
+    3. Busca automatica: se o MAC nao estiver no IP salvo, varrer a rede local de forma leve para achar o IP atual daquele MAC, atualizar o cadastro e remontar a `rtsp_url` sozinho. Nenhuma acao do usuario.
+    4. Onde a tabela ARP nao estiver disponivel (Android 10+/Termux), usar a descoberta ONVIF (WS-Discovery, multicast UDP `239.255.255.250:3702`) com o identificador unico de cada camera. Muitas cameras (Intelbras, Hikvision, Dahua, XM) respondem.
+  - Painel em linguagem simples: mostrar "Camera 1 mudou de endereco e foi reconectada automaticamente" ou "Camera 1 nao encontrada na rede. Verifique se ela esta ligada". Nunca pedir para o usuario configurar IP ou roteador. Registrar tambem no log e no estado do item 2.
+  - Cameras ja cadastradas sem MAC: preencher o MAC automaticamente na primeira vez que a camera responder no IP salvo, sem pedir nada ao usuario.
+  - Limitacoes a tratar:
+    - Descoberta e tabela ARP so funcionam com o NVR na mesma rede local das cameras (nao atravessam outro roteador nem Tailscale).
+    - Repetidores Wi-Fi que fazem "MAC NAT" podem mostrar o MAC do repetidor em vez do da camera; detectar MAC repetido em varias cameras e usar o identificador ONVIF nesse caso.
+    - A busca deve ser leve (so quando a camera sumir, com limite de tempo e sem varrer a rede o tempo todo), pensando em hardware simples.
+  - Teste: simular duas cameras trocando de IP e confirmar que cada gravacao continua no nome correto e que a pagina de cada camera mostra a camera certa.
+  - Feito em 2026-09-24 (camadas 2 e 3, preenchimento automatico do MAC e limitacoes): modulo `rede.py`; MAC aprendido sozinho no cadastro, na edicao e em cameras antigas enquanto gravam; conferencia do MAC antes de iniciar e a cada ciclo; busca na tabela ARP e varredura da /24 (1,5 s por IP, 64 em paralelo, ~7 s, no maximo a cada 5 min por camera); IP e URL atualizados sozinhos em `cameras.local.json`; painel mostra "Camera nao encontrada na rede" e o aviso de reconexao; editar o IP descarta o MAC antigo; MAC repetido nao e salvo.
+  - Achado no teste com as cameras reais: a camera do Quintal responde ping em 50-110 ms e nao aparecia na varredura com 0,4 s de timeout. O timeout foi aumentado para 1,5 s com espera final de 1 s.
+  - Pendente, separado nos itens 28 (cadastro escolhendo a camera numa lista, sem digitar IP) e 29 (descoberta ONVIF para Android/Termux).
 
 - [x] 3. Verificar corretamente o caminho de gravacao.
   - Sintoma relatado: o sistema nao verifica direito o caminho de gravacao.

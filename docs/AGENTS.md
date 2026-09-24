@@ -13,6 +13,7 @@ O uso previsto e local: `localhost`, rede local confiavel ou Tailscale. O painel
 - `servidor.py`: aplicacao Flask do painel web. Lista cameras, mostra status, abre live view, exibe historico, reproduz gravacoes no navegador, permite download e cadastra/edita/remove cameras.
 - `captura.py`: processo continuo de captura. Le `cameras.local.json`, inicia um FFmpeg por camera e grava segmentos `.mp4` fragmentados.
 - `limpeza.py`: rotina de limpeza automatica. Monitora o uso do disco e apaga videos antigos elegiveis quando o limite configurado e ultrapassado.
+- `rede.py`: leitura da tabela ARP, varredura da rede local e localizacao de camera pelo MAC, usada pela captura e pelo cadastro.
 - `config.py`: configuracoes e funcoes compartilhadas, incluindo armazenamento, carregamento/salvamento de cameras, slug, perfis RTSP e mascaramento de RTSP.
 - Perfis RTSP conhecidos ficam em `RTSP_PERFIS`, dentro de `config.py`.
 - O caminho de gravacoes e resolvido por `encontrar_armazenamento()`: primeiro `NVRBOX_GRAVACOES`, depois a escolha salva em `sistema.json`, depois HD externo gravavel em caminhos Linux/Android conhecidos, e por fim `gravacoes/` local.
@@ -61,6 +62,7 @@ O uso previsto e local: `localhost`, rede local confiavel ou Tailscale. O painel
 - Rotas que alteram estado devem usar `POST`.
 - Evite `except:` generico; capture excecoes especificas sempre que possivel.
 - Ao mexer na captura, mantenha o timeout RTSP (`argumentos_timeout_rtsp()`) e a deteccao de segmento parado. Sem eles, um FFmpeg travado fica vivo sem gravar e ninguem percebe (ja aconteceu em producao por ~5 dias).
+- A identidade de uma camera e o MAC, nao o IP. Nao remova a conferencia de MAC antes de iniciar a gravacao nem o descarte do MAC quando o usuario muda o IP na edicao.
 - Ao mexer na captura, preserve a gravacao fragmentada. Sem isso, uma queda de energia antes do fechamento do segmento pode deixar o `.mp4` antigo sem indice final e sem reproducao no navegador.
 - Ao mexer na reproducao de gravacoes, preserve a rota `/video_compativel/<arquivo>` ou ofereca alternativa equivalente. Alguns `.mp4` baixam e abrem em player externo, mas nao tocam diretamente no `<video>` do navegador.
 

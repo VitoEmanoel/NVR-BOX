@@ -370,6 +370,33 @@ def salvar_cameras(cameras):
     salvar_json_atomico(ARQUIVO_CAMERAS, cameras)
 
 
+def atualizar_camera(slug, **campos):
+    """Rele o cadastro, altera so a camera indicada e salva. Retorna a camera ou None."""
+    cameras = carregar_cameras()
+    for camera in cameras:
+        if slug_camera(camera) == slug:
+            camera.update(campos)
+            salvar_cameras(cameras)
+            return camera
+    return None
+
+
+def trocar_host_rtsp(url, novo_host):
+    """Troca so o IP da URL RTSP, mantendo usuario, senha, porta e caminho."""
+    parsed = urlparse(url)
+    netloc = parsed.netloc
+    credenciais = ""
+    if "@" in netloc:
+        credenciais, netloc = netloc.rsplit("@", 1)
+        credenciais += "@"
+    porta = f":{parsed.port}" if parsed.port else ""
+    return urlunparse(parsed._replace(netloc=f"{credenciais}{novo_host}{porta}"))
+
+
+def host_rtsp(url):
+    return urlparse(url).hostname or ""
+
+
 def carregar_estado_captura():
     try:
         with open(ARQUIVO_ESTADO_CAPTURA, "r", encoding="utf-8") as arquivo:

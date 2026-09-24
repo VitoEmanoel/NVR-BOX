@@ -9,6 +9,7 @@ import time
 from secrets import compare_digest
 from urllib.parse import unquote, urlparse
 
+import rede
 from config import (
     ArmazenamentoIndisponivel,
     AUTH_ATIVA,
@@ -162,7 +163,13 @@ def resumo_gravacao(slug, estado_captura, agora=None):
 
     detalhe = info.get("ultimo_erro") or info.get("ultimo_motivo") or ""
     if info.get("estado") == "gravando":
-        return {"codigo": "gravando", "texto": "Gravando", "detalhe": ""}
+        return {"codigo": "gravando", "texto": "Gravando", "detalhe": info.get("aviso") or ""}
+    if info.get("estado") == "nao_encontrada":
+        return {
+            "codigo": "parada",
+            "texto": "Camera nao encontrada na rede",
+            "detalhe": "Verifique se ela esta ligada. O sistema continua procurando sozinho.",
+        }
 
     ultima = info.get("ultima_gravacao")
     erro_geral = estado_captura.get("erro")
@@ -448,6 +455,15 @@ def testar_rtsp_stream(url, transporte):
 
     return True, None
 
+def descobrir_mac_camera(ip, porta, outras_cameras):
+    """MAC da camera nesse IP, para o usuario nao precisar digitar. Vazio se nao der."""
+    mac = rede.mac_do_ip(ip, int(porta))
+    macs_em_uso = {rede.normalizar_mac(camera.get("mac")) for camera in outras_cameras}
+    if not mac or mac in macs_em_uso:
+        return ""
+    return mac
+
+
 def validar_nova_camera(dados, cameras):
     ip = (dados.get("ip") or "").strip()
     senha = (dados.get("senha") or "").strip()
@@ -496,6 +512,9 @@ def validar_nova_camera(dados, cameras):
         if not ok:
             return None, erro
 
+    if not mac:
+        mac = descobrir_mac_camera(ip, porta, cameras)
+
     return {
         "nome": nome,
         "rtsp_url": rtsp_url,
@@ -525,6 +544,13 @@ def validar_edicao_camera(dados, cameras, slug_atual, camera_atual):
 
     if perfil == "manual" and not caminho_manual:
         caminho_manual = obter_caminho_manual_camera(camera_atual)
+
+    ip_atual = camera_atual.get("ip") or urlparse(camera_atual.get("rtsp_url", "")).hostname or ""
+    ip_alterado = ip != ip_atual
+    if ip_alterado and mac.lower() == (camera_atual.get("mac") or "").lower():
+        # O MAC salvo era do aparelho no IP antigo. Sem apagar, a captura
+        # "corrigiria" o IP de volta ao achar esse MAC na rede.
+        mac = ""
 
     if not nome:
         return None, "Nome da camera e obrigatorio."
@@ -561,6 +587,10 @@ def validar_edicao_camera(dados, cameras, slug_atual, camera_atual):
         ok, erro = testar_rtsp_stream(rtsp_url, protocolo)
         if not ok:
             return None, erro
+
+    if not mac:
+        outras = [camera for camera in cameras if slug_camera(camera) != slug_atual]
+        mac = descobrir_mac_camera(ip, porta, outras)
 
     camera_atualizada = dict(camera_atual)
     camera_atualizada.update({

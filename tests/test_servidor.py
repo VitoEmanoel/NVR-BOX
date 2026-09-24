@@ -170,10 +170,77 @@ class StatusGravacaoTest(unittest.TestCase):
         self.assertEqual(resumo["texto"], "Sem gravar ha 10 min")
         self.assertIn("Conecte o HD", resumo["detalhe"])
 
+    def test_camera_nao_encontrada_na_rede(self):
+        estado = self.estado(estado="nao_encontrada")
+        resumo = servidor.resumo_gravacao("garagem", estado, agora=self.AGORA)
+        self.assertEqual(resumo["texto"], "Camera nao encontrada na rede")
+        self.assertIn("Verifique se ela esta ligada", resumo["detalhe"])
+
+    def test_gravando_mostra_aviso_de_troca_de_endereco(self):
+        estado = self.estado(aviso="Camera mudou de endereco (192.168.0.2 -> 192.168.0.3) e foi reconectada automaticamente")
+        resumo = servidor.resumo_gravacao("garagem", estado, agora=self.AGORA)
+        self.assertEqual(resumo["codigo"], "gravando")
+        self.assertIn("reconectada automaticamente", resumo["detalhe"])
+
     def test_api_status_inclui_gravacao(self):
         dados = self.get("/api/camera/garagem/status", None).get_json()
         self.assertTrue(dados["online"])
         self.assertEqual(dados["gravacao"]["codigo"], "captura_parada")
+
+
+class MacNoCadastroTest(unittest.TestCase):
+    def camera_atual(self):
+        return {
+            "nome": "Lateral casa",
+            "slug": "lateral_casa",
+            "ip": "192.168.0.2",
+            "mac": "28:f5:2b:a9:6f:27",
+            "usuario": "admin",
+            "porta": 554,
+            "perfil": "onvif1",
+            "protocolo": "udp",
+            "rtsp_url": "rtsp://admin:senha@192.168.0.2:554/onvif1",
+        }
+
+    def form(self, **campos):
+        dados = {"nome": "Lateral casa", "ip": "192.168.0.2", "usuario": "admin", "porta": "554",
+                 "perfil": "onvif1", "protocolo": "udp", "mac": "28:f5:2b:a9:6f:27"}
+        dados.update(campos)
+        return dados
+
+    def validar(self, dados, mac_na_rede):
+        atual = self.camera_atual()
+        with (
+            mock.patch.object(servidor, "TESTAR_RTSP_CADASTRO", False),
+            mock.patch.object(servidor.rede, "mac_do_ip", return_value=mac_na_rede) as mac_do_ip,
+        ):
+            camera, erro = servidor.validar_edicao_camera(dados, [atual], "lateral_casa", atual)
+        self.assertIsNone(erro)
+        return camera, mac_do_ip
+
+    def test_mudar_ip_troca_o_mac_pelo_do_novo_aparelho(self):
+        camera, _ = self.validar(self.form(ip="192.168.0.3"), "f0:a8:82:02:91:1a")
+        self.assertEqual(camera["ip"], "192.168.0.3")
+        self.assertEqual(camera["mac"], "f0:a8:82:02:91:1a")
+
+    def test_mudar_ip_sem_achar_mac_deixa_vazio_para_aprender_depois(self):
+        camera, _ = self.validar(self.form(ip="192.168.0.3"), None)
+        self.assertEqual(camera["mac"], "")
+
+    def test_sem_mudar_ip_mantem_mac(self):
+        camera, mac_do_ip = self.validar(self.form(), "f0:a8:82:02:91:1a")
+        self.assertEqual(camera["mac"], "28:f5:2b:a9:6f:27")
+        mac_do_ip.assert_not_called()
+
+    def test_cadastro_novo_preenche_mac_sozinho(self):
+        dados = {"nome": "Garagem", "ip": "192.168.0.4", "senha": "x", "perfil": "onvif1"}
+        with (
+            mock.patch.object(servidor, "TESTAR_RTSP_CADASTRO", False),
+            mock.patch.object(servidor.rede, "mac_do_ip", return_value="4c:a3:8f:35:ec:30"),
+        ):
+            camera, erro = servidor.validar_nova_camera(dados, [])
+        self.assertIsNone(erro)
+        self.assertEqual(camera["mac"], "4c:a3:8f:35:ec:30")
 
 
 if __name__ == "__main__":

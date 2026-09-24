@@ -182,6 +182,20 @@ O painel inicial e a tela da camera leem esse arquivo:
 
 O status "online" continua sendo apenas o teste da porta RTSP e nao indica que a camera esta gravando.
 
+## Identificacao das cameras pelo MAC
+
+Quando falta energia ou o roteador reinicia, as cameras podem receber IPs diferentes, inclusive trocados entre si. O MAC de cada camera nao muda, entao o sistema usa o MAC para saber qual aparelho e qual camera. Isso fica em `rede.py`.
+
+- No cadastro e na edicao, o MAC e preenchido sozinho a partir da tabela ARP depois do teste da camera. O usuario nao precisa digitar.
+- Cameras antigas sem MAC aprendem o MAC automaticamente na primeira vez que estiverem gravando.
+- Antes de iniciar cada gravacao, `captura.py` confere se o IP salvo ainda pertence ao MAC da camera. Se nao pertencer, procura o MAC na tabela ARP e, se preciso, varre a rede local (/24 do ultimo IP, porta RTSP, cerca de 7 segundos). Achando, atualiza IP e URL RTSP em `cameras.local.json` e registra "Camera mudou de endereco (... -> ...) e foi reconectada automaticamente".
+- A cada ciclo de 10 segundos, a captura tambem confere se o IP de uma camera que esta gravando passou a ser de outro aparelho. Se passou, reinicia a camera, que e procurada de novo.
+- Camera nao encontrada aparece no painel como "Camera nao encontrada na rede". O sistema continua tentando a cada 30 segundos e varre a rede no maximo a cada 5 minutos por camera.
+- Ao mudar o IP de uma camera pela edicao, o MAC antigo e descartado e aprendido de novo no IP novo. Sem isso, a captura "corrigiria" o IP de volta.
+- Um MAC ja usado por outra camera nao e salvo, para nao confundir cameras atras de repetidores Wi-Fi que mostram o mesmo MAC para varios aparelhos.
+
+Limitacoes: funciona com o NVR na mesma rede local das cameras. No Android 10+ (Termux) a tabela ARP e bloqueada; nesse caso o sistema segue usando o IP salvo, sem bloquear a gravacao.
+
 ## Reproducao e download
 
 As gravacoes ficam listadas na tela de detalhe de cada camera. O sistema usa `ffprobe` para verificar duracao e validade do arquivo antes de liberar a reproducao no painel.

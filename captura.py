@@ -12,15 +12,19 @@ from config import (
     FFMPEG_LOG_MAX_BYTES,
     RTSP_TRANSPORTE_PADRAO,
     argumentos_timeout_rtsp,
+    atualizar_camera,
     carregar_cameras,
     get_caminho_videos,
     get_tempo_segmento,
     garantir_diretorios,
+    host_rtsp,
     mascarar_rtsp,
     nome_video_pertence_camera,
     salvar_estado_captura,
     slug_camera,
+    trocar_host_rtsp,
 )
+from rede import PORTA_RTSP_PADRAO, ler_tabela_arp, localizar_camera, normalizar_mac, varrer_rede
 
 INTERVALO_WATCHDOG = 10
 # Tempo para o FFmpeg conectar e gravar o primeiro trecho (inclui -analyzeduration de 15 s).
@@ -33,6 +37,10 @@ INTERVALO_MINIMO_REINICIO = 30
 INTERVALO_TESTE_ESCRITA = 60
 # O estado e regravado quando muda e, no maximo, a cada INTERVALO_ESTADO como sinal de vida.
 INTERVALO_ESTADO = 60
+# Varredura da rede atras de uma camera sumida: no maximo uma a cada 5 minutos por camera.
+INTERVALO_VARREDURA = 300
+# Aviso "mudou de endereco" fica visivel no painel por 24 horas.
+DURACAO_AVISO = 24 * 3600
 
 RTSP_CREDENCIAIS_REGEX = re.compile(r"(rtsp://)[^@\s/]*@")
 
@@ -132,6 +140,73 @@ def gravacao_travada(registro, agora_mono, limite=LIMITE_SEM_GRAVACAO, toleranci
     return agora_mono - referencia > limite
 
 
+def porta_camera(cam):
+    try:
+        return int(cam.get("porta") or 0) or PORTA_RTSP_PADRAO
+    except (TypeError, ValueError):
+        return PORTA_RTSP_PADRAO
+
+
+def endereco_trocado(cam, tabela_arp):
+    """True se o IP da camera passou a responder por outro aparelho (outro MAC)."""
+    mac = normalizar_mac(cam.get("mac"))
+    if not mac or not tabela_arp:
+        return False
+    mac_atual = tabela_arp.get(host_rtsp(cam.get("rtsp_url", "")))
+    return mac_atual is not None and mac_atual != mac
+
+
+def aprender_mac(cam, slug, tabela_arp, macs_em_uso, salvar=atualizar_camera):
+    """Salva o MAC de uma camera que esta gravando e ainda nao tem MAC.
+
+    Retorna o MAC salvo, ou None. Nao salva MAC ja usado por outra camera
+    (repetidores Wi-Fi com "MAC NAT" mostram o mesmo MAC para varios aparelhos).
+    """
+    if normalizar_mac(cam.get("mac")) or not tabela_arp:
+        return None
+    mac = tabela_arp.get(host_rtsp(cam.get("rtsp_url", "")))
+    if not mac or mac in macs_em_uso:
+        return None
+    salvar(slug, mac=mac)
+    cam["mac"] = mac
+    return mac
+
+
+def preparar_inicio(cam, slug, info, agora_mono, agora,
+                    localizar=localizar_camera, varrer=varrer_rede, salvar=atualizar_camera):
+    """Confere pelo MAC se a camera ainda esta no IP salvo antes de iniciar o FFmpeg.
+
+    Retorna a camera (com IP atualizado se ela mudou de endereco) ou None se ela
+    nao foi encontrada na rede. Sem MAC salvo, segue com o IP atual.
+    """
+    ip_atual = host_rtsp(cam.get("rtsp_url", ""))
+    porta = porta_camera(cam)
+
+    def varrer_limitado(ip_referencia, porta_rtsp):
+        if agora_mono - info.get("ultima_varredura_mono", float("-inf")) < INTERVALO_VARREDURA:
+            return ler_tabela_arp()
+        info["ultima_varredura_mono"] = agora_mono
+        return varrer(ip_referencia, porta_rtsp)
+
+    novo_ip, situacao = localizar(cam.get("mac"), ip_atual, porta, varrer=varrer_limitado)
+    if situacao == "nao_encontrada":
+        if not info.get("nao_encontrada"):
+            print(f"[!] Camera nao encontrada na rede: {cam.get('nome', slug)}", flush=True)
+        info["nao_encontrada"] = True
+        return None
+
+    info["nao_encontrada"] = False
+    if situacao == "mudou":
+        nova_url = trocar_host_rtsp(cam["rtsp_url"], novo_ip)
+        salvar(slug, ip=novo_ip, rtsp_url=nova_url)
+        cam = {**cam, "ip": novo_ip, "rtsp_url": nova_url}
+        aviso = f"Camera mudou de endereco ({ip_atual} -> {novo_ip}) e foi reconectada automaticamente"
+        print(f"[!] {aviso}: {cam.get('nome', slug)}", flush=True)
+        info["aviso"] = aviso
+        info["aviso_em"] = agora
+    return cam
+
+
 def iniciar_ffmpeg(cam, caminho_videos, tempo_segmento):
     url = cam['rtsp_url']
     slug = slug_camera(cam)
@@ -200,9 +275,9 @@ def encerrar_ffmpeg(registro):
     registro["log"].close()
 
 
-def estado_camera(registro, agora_mono):
+def estado_camera(registro, agora_mono, info=None):
     if registro is None:
-        return "reconectando"
+        return "nao_encontrada" if (info or {}).get("nao_encontrada") else "reconectando"
     if registro.get("ultimo_progresso_mono") is None:
         return "iniciando"
     if agora_mono - registro["ultimo_progresso_mono"] <= LIMITE_SEM_GRAVACAO:
@@ -216,9 +291,11 @@ def montar_estado(caminho_videos, lista_cameras, processos, historico, agora_mon
         slug = slug_camera(cam)
         registro = processos.get(slug)
         info = historico.get(slug, {})
+        aviso_recente = info.get("aviso") and agora - info.get("aviso_em", 0) <= DURACAO_AVISO
         cameras[slug] = {
             "nome": cam.get("nome", slug),
-            "estado": estado_camera(registro, agora_mono),
+            "estado": estado_camera(registro, agora_mono, info),
+            "aviso": info.get("aviso") if aviso_recente else None,
             "ultima_gravacao": info.get("ultima_gravacao"),
             "reinicios": info.get("reinicios", 0),
             "ultimo_motivo": info.get("ultimo_motivo"),
@@ -241,7 +318,7 @@ def resumo_para_comparar(estado):
         estado.get("caminho_videos"),
         estado.get("erro"),
         tuple(
-            (slug, info["estado"], info["reinicios"], info["ultimo_motivo"])
+            (slug, info["estado"], info["reinicios"], info["ultimo_motivo"], info.get("aviso"))
             for slug, info in sorted(estado["cameras"].items())
         ),
     )
@@ -312,6 +389,8 @@ if __name__ == '__main__':
                 caminho_atual = novo_caminho
 
             slugs_ativos = {slug_camera(cam) for cam in lista_cameras}
+            tabela_arp = ler_tabela_arp()
+            macs_em_uso = {normalizar_mac(cam.get("mac")) for cam in lista_cameras} - {None}
 
             for slug in list(processos.keys()):
                 if slug not in slugs_ativos:
@@ -338,6 +417,13 @@ if __name__ == '__main__':
                     elif registro.get("assinatura") != assinatura:
                         print(f"[!] Configuracao alterada. Reiniciando captura: {nome}", flush=True)
                         encerrar_ffmpeg(processos.pop(slug))
+                    elif endereco_trocado(cam, tabela_arp):
+                        motivo = "O endereco da camera passou a ser de outro aparelho"
+                        print(f"[!] {motivo}. Procurando a camera: {nome}", flush=True)
+                        registrar_motivo(historico, slug, motivo, registro, agora)
+                        encerrar_ffmpeg(processos.pop(slug))
+                        # Procura ja no proximo ciclo, sem esperar o intervalo de reinicio.
+                        ultimo_inicio.pop(slug, None)
                     elif gravacao_travada(registro, agora_mono):
                         if registro.get("ultimo_progresso_mono") is None:
                             motivo = f"Nenhum video gravado em {TOLERANCIA_INICIO} s apos iniciar"
@@ -350,9 +436,12 @@ if __name__ == '__main__':
                 if slug not in processos:
                     if agora_mono - ultimo_inicio.get(slug, float("-inf")) < INTERVALO_MINIMO_REINICIO:
                         continue
+                    ultimo_inicio[slug] = agora_mono
+                    cam = preparar_inicio(cam, slug, historico.setdefault(slug, {}), agora_mono, agora)
+                    if cam is None:
+                        continue
                     print(f"[!] Iniciando captura: {nome} -> {mascarar_rtsp(cam['rtsp_url'])}", flush=True)
                     processos[slug] = iniciar_ffmpeg(cam, caminho_atual, tempo_segmento)
-                    ultimo_inicio[slug] = agora_mono
                     info = historico.setdefault(slug, {})
                     medida_inicial = processos[slug]["medida"]
                     if info.get("ultima_gravacao") is None and medida_inicial:
@@ -362,6 +451,11 @@ if __name__ == '__main__':
                             pass
                 else:
                     rotacionar_log(processos[slug]["log_path"])
+                    if estado_camera(processos[slug], agora_mono) == "gravando":
+                        mac = aprender_mac(cam, slug, tabela_arp, macs_em_uso)
+                        if mac:
+                            macs_em_uso.add(mac)
+                            print(f"[!] MAC da camera registrado: {nome} -> {mac}", flush=True)
         except Exception as e:
             erro_ciclo = str(e)
             if erro_ciclo != ultimo_erro_impresso:

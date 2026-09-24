@@ -175,5 +175,86 @@ class EstadoTest(unittest.TestCase):
         self.assertNotEqual(captura.resumo_para_comparar(estado), captura.resumo_para_comparar(outro))
 
 
+MAC_LATERAL = "28:f5:2b:a9:6f:27"
+MAC_QUINTAL = "f0:a8:82:02:91:1a"
+
+
+def camera(nome, slug, ip, mac=""):
+    return {
+        "nome": nome,
+        "slug": slug,
+        "ip": ip,
+        "mac": mac,
+        "porta": 554,
+        "rtsp_url": f"rtsp://admin:senha@{ip}:554/onvif1",
+    }
+
+
+class CameraPorMacTest(unittest.TestCase):
+    def test_troca_de_ip_entre_duas_cameras_corrige_o_cadastro(self):
+        lateral = camera("Lateral casa", "lateral_casa", "192.168.0.2", MAC_LATERAL)
+        quintal = camera("Quintal", "quintal", "192.168.0.3", MAC_QUINTAL)
+        tabela = {"192.168.0.2": MAC_QUINTAL, "192.168.0.3": MAC_LATERAL}
+        salvos = {}
+
+        def localizar(mac, ip, porta, varrer):
+            return captura.localizar_camera(
+                mac, ip, porta, ler_arp=lambda: tabela, tocar=lambda *a: False, varrer=varrer
+            )
+
+        def salvar(slug, **campos):
+            salvos[slug] = campos
+
+        infos = {"lateral_casa": {}, "quintal": {}}
+        nova_lateral = captura.preparar_inicio(lateral, "lateral_casa", infos["lateral_casa"], 0, 1000, localizar=localizar, salvar=salvar)
+        novo_quintal = captura.preparar_inicio(quintal, "quintal", infos["quintal"], 0, 1000, localizar=localizar, salvar=salvar)
+
+        self.assertEqual(nova_lateral["rtsp_url"], "rtsp://admin:senha@192.168.0.3:554/onvif1")
+        self.assertEqual(novo_quintal["rtsp_url"], "rtsp://admin:senha@192.168.0.2:554/onvif1")
+        self.assertEqual(salvos["lateral_casa"], {"ip": "192.168.0.3", "rtsp_url": "rtsp://admin:senha@192.168.0.3:554/onvif1"})
+        self.assertEqual(salvos["quintal"]["ip"], "192.168.0.2")
+        self.assertIn("192.168.0.2 -> 192.168.0.3", infos["lateral_casa"]["aviso"])
+
+    def test_camera_nao_encontrada_nao_inicia_e_limita_varredura(self):
+        cam = camera("Lateral casa", "lateral_casa", "192.168.0.2", MAC_LATERAL)
+        varreduras = []
+
+        def localizar(mac, ip, porta, varrer):
+            varrer(ip, porta)
+            return None, "nao_encontrada"
+
+        info = {}
+        with mock.patch.object(captura, "ler_tabela_arp", return_value={}):
+            for agora_mono in (0, 30, 60, captura.INTERVALO_VARREDURA + 1):
+                self.assertIsNone(captura.preparar_inicio(
+                    cam, "lateral_casa", info, agora_mono, 0,
+                    localizar=localizar, varrer=lambda ip, porta: varreduras.append(ip) or {},
+                ))
+
+        self.assertTrue(info["nao_encontrada"])
+        self.assertEqual(len(varreduras), 2)
+        self.assertEqual(captura.estado_camera(None, 0, info), "nao_encontrada")
+
+    def test_endereco_trocado_detecta_outro_aparelho_no_ip(self):
+        cam = camera("Lateral casa", "lateral_casa", "192.168.0.2", MAC_LATERAL)
+        self.assertFalse(captura.endereco_trocado(cam, {"192.168.0.2": MAC_LATERAL}))
+        self.assertFalse(captura.endereco_trocado(cam, {}))
+        self.assertFalse(captura.endereco_trocado(cam, None))
+        self.assertTrue(captura.endereco_trocado(cam, {"192.168.0.2": MAC_QUINTAL}))
+        self.assertFalse(captura.endereco_trocado(camera("Sem mac", "sem_mac", "192.168.0.2"), {"192.168.0.2": MAC_QUINTAL}))
+
+    def test_aprende_mac_sem_repetir(self):
+        salvos = {}
+        cam = camera("Garagem", "garagem", "192.168.0.4")
+        tabela = {"192.168.0.4": "4c:a3:8f:35:ec:30"}
+
+        mac = captura.aprender_mac(cam, "garagem", tabela, set(), salvar=lambda slug, **c: salvos.update({slug: c}))
+        self.assertEqual(mac, "4c:a3:8f:35:ec:30")
+        self.assertEqual(salvos, {"garagem": {"mac": "4c:a3:8f:35:ec:30"}})
+
+        outra = camera("Fundos", "fundos", "192.168.0.4")
+        self.assertIsNone(captura.aprender_mac(outra, "fundos", tabela, {"4c:a3:8f:35:ec:30"}, salvar=lambda *a, **c: self.fail()))
+
+
 if __name__ == "__main__":
     unittest.main()
