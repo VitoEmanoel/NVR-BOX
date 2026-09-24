@@ -149,6 +149,7 @@ Problemas que causam perda de gravacao, perda de dados ou deixam o painel inutil
 
 - [ ] 15. Melhorar confiabilidade do RTSP.
   - Manter UDP/TCP por camera; o padrao atual e UDP, que perde pacotes com facilidade em Wi-Fi.
+  - Evidencia (2026-09-24, com o log limpo apos o item 8): nas 3 cameras do Orange Pi aparecem continuamente `RTP: missed N packets`, `Too short data for FU-A H.264 RTP packet` e `max delay reached`, ou seja, perda de pacotes UDP que gera quadros corrompidos na gravacao. Sao cerca de 9 KB de avisos a cada 3,5 minutos por camera. Testar TCP nessas cameras e prioridade dentro deste item.
   - Recomendar TCP quando houver perda de pacotes.
   - Detectar mensagens comuns nos logs do FFmpeg, como perda RTP.
   - Mostrar sugestao clara no painel quando uma camera estiver instavel.
@@ -272,6 +273,7 @@ Decisao do usuario (2026-09-24): nao corrigir nem renomear o historico atual. De
   - `captura.py` deve gravar um arquivo de estado (ex.: `.run/estado_captura.json`) com, por camera: gravando/parada, hora do ultimo segmento, numero de reinicios e ultimo erro do FFmpeg.
   - Painel e tela da camera devem mostrar "Gravando", "Parada ha X min" e o ultimo erro.
   - Alertar quando o proprio processo de captura nao estiver rodando (estado desatualizado).
+  - Em producao no Orange Pi desde 2026-09-24 14:18: as 3 cameras aparecem como `Gravando` no painel.
   - Feito em 2026-09-24: `.run/estado_captura.json` com estado, ultima gravacao, reinicios, ultimo motivo e ultimo erro (senha mascarada); painel inicial mostra `Gravando`, `Conectando...`, `Sem gravar ha X` por camera e aviso geral quando a captura nao esta rodando; tela da camera ganhou o card `Gravacao` com o ultimo erro. Estado gravado sem `fsync` e no maximo a cada 60 s quando nada muda.
 
 - [x] 8. Preservar o log de erro do FFmpeg entre reinicios.
