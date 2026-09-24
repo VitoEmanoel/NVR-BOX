@@ -102,6 +102,26 @@ Problemas que causam perda de gravacao, perda de dados ou deixam o painel inutil
   - **Comprovado**: `NVRBOX_TEMPO_SEGMENTO=-5` e aceito e repassado ao FFmpeg. Aplicar a mesma validacao do painel (5, 10 ou 15 minutos) ou ao menos exigir valor positivo.
   - Tratar valores invalidos em `NVRBOX_LIMITE_DISCO`, `NVRBOX_TIMEOUT_TESTE_RTSP` e `NVRBOX_FFMPEG_LOG_MAX_BYTES`, que hoje derrubam o sistema na importacao.
 
+- [ ] 33. Modo nuvem: enviar as gravacoes para o Google Drive, com pendrive como fila.
+  - Decisao do usuario (2026-09-24): usar **Google Drive** como armazenamento principal e um **pendrive** (64 ou 128 GB) no lugar do HD, so como fila de envio.
+  - Motivo: o HD de notebook nao liga no Orange Pi por falta de energia (item 31). Um pendrive consome uma fracao disso. A nuvem tambem protege as gravacoes se o aparelho for roubado ou o disco falhar.
+  - Internet medida pelo usuario: 487 Mbps de download e 314 Mbps de upload. As 3 cameras precisam de ~1,2 Mbps de upload continuo (~13 GB/dia), entao a folga e grande. A porta de rede do Orange Pi PC Plus e de 100 Mbps, tambem suficiente.
+  - Funcionamento:
+    - Captura continua gravando segmentos no pendrive, como hoje.
+    - Um processo separado (`nuvem.py`) envia cada segmento fechado com `rclone` (binario leve, disponivel para ARM, sem reencodar), confere que chegou (tamanho/hash) e so entao apaga do pendrive.
+    - Sem internet, a fila cresce no pendrive e e enviada quando a conexao voltar. Um pendrive de 64 GB segura ~4 dias. Se encher, descarta os segmentos mais antigos ainda nao enviados, para nunca parar de gravar, e avisa no painel.
+    - Na nuvem, organizar em pastas por camera e dia (`NVRBox/<camera>/<AAAA-MM-DD>/`) e apagar sozinho o que passar do prazo escolhido.
+    - Enviar em paralelo limitado (1 ou 2 arquivos por vez) e com limite de banda configuravel, para nao atrapalhar a internet da casa nem pesar no Orange Pi.
+  - Painel, para quem nao e tecnico:
+    - Botao "Conectar Google Drive" com login feito pelo celular. O Orange Pi nao tem tela, entao o fluxo de autorizacao precisa passar pelo painel (esta e a parte mais trabalhosa; o `rclone config` padrao exige navegador no proprio aparelho).
+    - Indicador "Nuvem em dia" ou "X videos esperando envio" e aviso em linguagem simples se o envio falhar (sem internet, sem espaco no Drive, login expirado).
+    - Escolha de quantos dias guardar na nuvem.
+    - Lista de gravacoes buscando na nuvem os videos que ja sairam do pendrive.
+  - Nao usar o cartao do sistema como fila: tem ~5 GB livres e as cameras escreveriam ~13 GB/dia nele, o que desgasta o cartao e pode derrubar o sistema inteiro.
+  - Pendente de decisao do usuario: quantos dias guardar no Drive e quais cameras enviar (todas ou so algumas). Espaco gratis do Google (15 GB) nao cobre nem 2 dias; um plano de 2 TB guarda ~5 meses das 3 cameras.
+  - Com segmentos de 15 minutos, o trecho mais recente so chega a nuvem quando o segmento fecha. Para protecao contra roubo, recomendar segmentos de 5 minutos no modo nuvem.
+  - Seguranca: o token do Google Drive fica no aparelho; guardar com permissao restrita (arquivo so para o usuario do servico) e nunca exibir no painel.
+
 ## Prioridade media
 
 - [ ] 14. Remover dependencia de internet na interface.
@@ -222,8 +242,9 @@ Problemas que causam perda de gravacao, perda de dados ou deixam o painel inutil
 4. Seguranca dos dados (itens 6 e 7).
 5. Correcoes rapidas (itens 9, 12 e 13).
 6. Desempenho em hardware fraco (itens 10 e 11).
-7. Itens de prioridade media e baixa.
-8. Recomeco em producao: apagar gravacoes antigas e gravar do zero (secao abaixo).
+7. Modo nuvem com Google Drive e pendrive de fila (item 33), depois de decidir prazo e cameras.
+8. Itens de prioridade media e baixa.
+9. Recomeco em producao: apagar gravacoes antigas e gravar do zero (secao abaixo).
 
 ## Recomeco em producao (depois das melhorias)
 
