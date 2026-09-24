@@ -105,6 +105,7 @@ Problemas que causam perda de gravacao, perda de dados ou deixam o painel inutil
   - `iniciar_nvr.sh` usa o `python3` do sistema; em distros que bloqueiam `pip` global (ex.: Arch) o Flask fica so no `.venv` e o painel nao sobe. Usar `.venv/bin/python` quando existir.
   - O script so acompanha o servidor. Se `captura.py` ou `limpeza.py` morrerem, nada percebe. Reiniciar automaticamente ou refletir no estado do item 2.
   - Ao encerrar o servidor, processos FFmpeg de live view e de `/video_compativel` podem ficar orfaos. Encerrar o grupo de processos.
+  - Ao parar o servico, o systemd registra `Failed with result 'exit-code'`: o `wait` do script devolve o codigo do servidor morto por SIGTERM (143). Tratar o encerramento para sair com 0.
   - Adicionar comandos `start`, `stop`, `restart` e `status`.
   - Verificar FFmpeg e ffprobe antes de iniciar.
   - Mostrar IP local de acesso ao painel.
@@ -255,6 +256,8 @@ Decisao do usuario (2026-09-24): nao corrigir nem renomear o historico atual. De
     - A busca deve ser leve (so quando a camera sumir, com limite de tempo e sem varrer a rede o tempo todo), pensando em hardware simples.
   - Teste: simular duas cameras trocando de IP e confirmar que cada gravacao continua no nome correto e que a pagina de cada camera mostra a camera certa.
   - Feito em 2026-09-24 (camadas 2 e 3, preenchimento automatico do MAC e limitacoes): modulo `rede.py`; MAC aprendido sozinho no cadastro, na edicao e em cameras antigas enquanto gravam; conferencia do MAC antes de iniciar e a cada ciclo; busca na tabela ARP e varredura da /24 (1,5 s por IP, 64 em paralelo, ~7 s, no maximo a cada 5 min por camera); IP e URL atualizados sozinhos em `cameras.local.json`; painel mostra "Camera nao encontrada na rede" e o aviso de reconexao; editar o IP descarta o MAC antigo; MAC repetido nao e salvo.
+  - Em producao no Orange Pi desde 2026-09-24 14:37: as 3 cameras aprenderam o MAC sozinhas em ~30 s. Com as entradas ARP das cameras apagadas, a varredura achou as 3 em 8 s (buscas seguintes em ~0,5 s), e a troca simulada Lateral casa <-> Quintal foi resolvida para os IPs certos, sem afetar as gravacoes.
+  - Observacao: os nomes atuais continuam invertidos (a camera cadastrada como "Lateral casa" filma o quintal). O MAC aprendido segue o cadastro atual; a correcao fica para o recomeco em producao, trocando os IPs pela edicao (o MAC e reaprendido sozinho).
   - Achado no teste com as cameras reais: a camera do Quintal responde ping em 50-110 ms e nao aparecia na varredura com 0,4 s de timeout. O timeout foi aumentado para 1,5 s com espera final de 1 s.
   - Pendente, separado nos itens 28 (cadastro escolhendo a camera numa lista, sem digitar IP) e 29 (descoberta ONVIF para Android/Termux).
 
