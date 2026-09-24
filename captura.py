@@ -37,6 +37,8 @@ INTERVALO_MINIMO_REINICIO = 30
 INTERVALO_TESTE_ESCRITA = 60
 # O estado e regravado quando muda e, no maximo, a cada INTERVALO_ESTADO como sinal de vida.
 INTERVALO_ESTADO = 60
+# Conferencia pelo MAC de cameras que nao estao gravando (inclusive sem HD).
+INTERVALO_CONFERENCIA = 30
 # Varredura da rede atras de uma camera sumida: no maximo uma a cada 5 minutos por camera.
 INTERVALO_VARREDURA = 300
 # Aviso "mudou de endereco" fica visivel no painel por 24 horas.
@@ -200,11 +202,39 @@ def preparar_inicio(cam, slug, info, agora_mono, agora,
         nova_url = trocar_host_rtsp(cam["rtsp_url"], novo_ip)
         salvar(slug, ip=novo_ip, rtsp_url=nova_url)
         cam = {**cam, "ip": novo_ip, "rtsp_url": nova_url}
-        aviso = f"Camera mudou de endereco ({ip_atual} -> {novo_ip}) e foi reconectada automaticamente"
+        aviso = f"Camera mudou de endereco ({ip_atual} -> {novo_ip}) e o sistema atualizou sozinho"
         print(f"[!] {aviso}: {cam.get('nome', slug)}", flush=True)
         info["aviso"] = aviso
         info["aviso_em"] = agora
     return cam
+
+
+def conferir_camera(cam, slug, info, agora_mono, agora, preparar=preparar_inicio):
+    """Confere o endereco pelo MAC e anota quando foi. Retorna a camera ou None."""
+    info["ultima_conferencia_mono"] = agora_mono
+    try:
+        return preparar(cam, slug, info, agora_mono, agora)
+    except OSError as erro:
+        # Falha ao salvar o cadastro nao pode derrubar a captura; tenta de novo depois.
+        print(f"[!] Nao foi possivel atualizar o endereco de {cam.get('nome', slug)}: {erro}", flush=True)
+        return cam
+
+
+def conferir_cameras_paradas(lista_cameras, processos, historico, agora_mono, agora, conferir=conferir_camera):
+    """Mantem o IP das cameras que nao estao gravando atualizado pelo MAC.
+
+    Roda antes da checagem do HD: mesmo sem gravar, o cadastro precisa apontar
+    para a camera certa, senao o ao vivo do painel mostra outra camera.
+    """
+    atualizadas = []
+    for cam in lista_cameras:
+        slug = slug_camera(cam)
+        info = historico.setdefault(slug, {})
+        vencida = agora_mono - info.get("ultima_conferencia_mono", float("-inf")) >= INTERVALO_CONFERENCIA
+        if slug not in processos and vencida:
+            cam = conferir(cam, slug, info, agora_mono, agora) or cam
+        atualizadas.append(cam)
+    return atualizadas
 
 
 def iniciar_ffmpeg(cam, caminho_videos, tempo_segmento):
@@ -362,7 +392,7 @@ if __name__ == '__main__':
     while True:
         agora_mono = time.monotonic()
         agora = time.time()
-        lista_cameras = carregar_cameras()
+        lista_cameras = conferir_cameras_paradas(carregar_cameras(), processos, historico, agora_mono, agora)
         erro_ciclo = None
         try:
             novo_caminho = get_caminho_videos()
@@ -436,13 +466,17 @@ if __name__ == '__main__':
                 if slug not in processos:
                     if agora_mono - ultimo_inicio.get(slug, float("-inf")) < INTERVALO_MINIMO_REINICIO:
                         continue
-                    ultimo_inicio[slug] = agora_mono
-                    cam = preparar_inicio(cam, slug, historico.setdefault(slug, {}), agora_mono, agora)
+                    info = historico.setdefault(slug, {})
+                    if agora_mono - info.get("ultima_conferencia_mono", float("-inf")) >= INTERVALO_CONFERENCIA:
+                        # Acabou de parar (enquanto gravava nao passa pela conferencia de cima).
+                        cam = conferir_camera(cam, slug, info, agora_mono, agora)
+                    elif info.get("nao_encontrada"):
+                        cam = None
                     if cam is None:
                         continue
+                    ultimo_inicio[slug] = agora_mono
                     print(f"[!] Iniciando captura: {nome} -> {mascarar_rtsp(cam['rtsp_url'])}", flush=True)
                     processos[slug] = iniciar_ffmpeg(cam, caminho_atual, tempo_segmento)
-                    info = historico.setdefault(slug, {})
                     medida_inicial = processos[slug]["medida"]
                     if info.get("ultima_gravacao") is None and medida_inicial:
                         try:

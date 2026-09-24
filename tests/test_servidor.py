@@ -261,10 +261,10 @@ class StatusGravacaoTest(unittest.TestCase):
         self.assertIn("Verifique se ela esta ligada", resumo["detalhe"])
 
     def test_gravando_mostra_aviso_de_troca_de_endereco(self):
-        estado = self.estado(aviso="Camera mudou de endereco (192.168.0.2 -> 192.168.0.3) e foi reconectada automaticamente")
+        estado = self.estado(aviso="Camera mudou de endereco (192.168.0.2 -> 192.168.0.3) e o sistema atualizou sozinho")
         resumo = servidor.resumo_gravacao("garagem", estado, agora=self.AGORA)
         self.assertEqual(resumo["codigo"], "gravando")
-        self.assertIn("reconectada automaticamente", resumo["detalhe"])
+        self.assertIn("o sistema atualizou sozinho", resumo["detalhe"])
 
     def test_api_status_inclui_gravacao(self):
         dados = self.get("/api/camera/garagem/status", None).get_json()

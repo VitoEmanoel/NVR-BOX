@@ -256,5 +256,43 @@ class CameraPorMacTest(unittest.TestCase):
         self.assertIsNone(captura.aprender_mac(outra, "fundos", tabela, {"4c:a3:8f:35:ec:30"}, salvar=lambda *a, **c: self.fail()))
 
 
+class ConferenciaSemGravarTest(unittest.TestCase):
+    def test_confere_so_cameras_paradas_e_respeita_intervalo(self):
+        garagem = camera("Garagem", "garagem", "192.168.0.4", "4c:a3:8f:35:ec:30")
+        quintal = camera("Quintal", "quintal", "192.168.0.2", MAC_QUINTAL)
+        conferidas = []
+
+        def conferir(cam, slug, info, agora_mono, agora):
+            info["ultima_conferencia_mono"] = agora_mono
+            conferidas.append(slug)
+            return {**cam, "ip": "192.168.0.99"}
+
+        historico = {}
+        processos = {"garagem": object()}  # garagem gravando
+        lista = captura.conferir_cameras_paradas([garagem, quintal], processos, historico, 0, 0, conferir=conferir)
+        self.assertEqual(conferidas, ["quintal"])
+        self.assertEqual([c["ip"] for c in lista], ["192.168.0.4", "192.168.0.99"])
+
+        captura.conferir_cameras_paradas([garagem, quintal], processos, historico, 10, 0, conferir=conferir)
+        self.assertEqual(conferidas, ["quintal"])
+        captura.conferir_cameras_paradas([garagem, quintal], processos, historico, captura.INTERVALO_CONFERENCIA, 0, conferir=conferir)
+        self.assertEqual(conferidas, ["quintal", "quintal"])
+
+    def test_camera_nao_encontrada_continua_na_lista(self):
+        cam = camera("Quintal", "quintal", "192.168.0.2", MAC_QUINTAL)
+        lista = captura.conferir_cameras_paradas([cam], {}, {}, 0, 0, conferir=lambda *a: None)
+        self.assertEqual(lista, [cam])
+
+    def test_falha_ao_salvar_cadastro_nao_derruba(self):
+        cam = camera("Quintal", "quintal", "192.168.0.2", MAC_QUINTAL)
+
+        def preparar(*_args):
+            raise PermissionError("somente leitura")
+
+        info = {}
+        self.assertIs(captura.conferir_camera(cam, "quintal", info, 5, 0, preparar=preparar), cam)
+        self.assertEqual(info["ultima_conferencia_mono"], 5)
+
+
 if __name__ == "__main__":
     unittest.main()

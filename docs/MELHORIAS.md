@@ -192,6 +192,14 @@ Problemas que causam perda de gravacao, perda de dados ou deixam o painel inutil
 - [x] 30. Aumentar o tempo do teste de camera no cadastro.
   - Feito em 2026-09-24: ao recadastrar as cameras no Orange Pi, a camera do Quintal foi recusada 3 vezes com "Nao foi possivel confirmar o RTSP dentro do tempo limite". O `ffprobe` dessas cameras genericas leva ~5-6 s com o Orange Pi livre e passava de 8 s com as outras gravacoes rodando. O padrao de `NVRBOX_TIMEOUT_TESTE_RTSP` passou de 8 para 20 s.
 
+- [ ] 31. HD externo sem energia suficiente no Orange Pi.
+  - Em 2026-09-24 19:15-19:19 houve 17 resets USB e o HD se desconectou (sistema de arquivos em modo de emergencia). Depois disso, no Orange Pi, o adaptador e reconhecido mas o disco nao (0 B, "Media removed", "inquiry failed") em duas portas diferentes, e o HD faz um barulho novo. No PC (USB 3) funciona e fica silencioso. SMART sem setores ruins nem erros de cabo; HD de notebook muito usado (6.361 h, 6.289 ligamentos, 744 desligamentos bruscos).
+  - Acao fisica: hub USB com fonte propria, case com fonte externa ou cabo Y; opcionalmente fonte 5 V / 3 A melhor para o Orange Pi.
+  - No software: trocar a mensagem tecnica ("Input/output error") por algo como "O HD parou de responder. Desconecte e conecte o cabo do HD."; ao reconectar, rodar `e2fsck` antes de montar, pois o journal foi abortado.
+
+- [x] 32. IP fixo para o Orange Pi sem acesso ao roteador.
+  - Feito em 2026-09-24: o roteador deu o IP antigo (.5) a outro aparelho enquanto o Orange Pi estava desligado; o MAC do Orange Pi nao muda. Adicionado `/etc/netplan/20-nvrbox-ip-fixo.yaml` com o endereco extra `192.168.0.200/24`, mantendo o DHCP (o roteador distribui os IPs baixos, .2 a .14). Aplicado com desfazer automatico armado e cancelado apos confirmar SSH, internet, DNS, Tailscale e cameras. Painel fixo em `http://192.168.0.200:5000`; pelo Tailscale, `http://100.101.18.100:5000`.
+
 ## Futuro
 
 - [ ] Avaliar Docker depois da base ficar robusta.
@@ -264,6 +272,7 @@ Decisao do usuario (2026-09-24): nao corrigir nem renomear o historico atual. De
   - Em producao no Orange Pi desde 2026-09-24 14:37: as 3 cameras aprenderam o MAC sozinhas em ~30 s. Com as entradas ARP das cameras apagadas, a varredura achou as 3 em 8 s (buscas seguintes em ~0,5 s), e a troca simulada Lateral casa <-> Quintal foi resolvida para os IPs certos, sem afetar as gravacoes.
   - Observacao: os nomes atuais continuam invertidos (a camera cadastrada como "Lateral casa" filma o quintal). O MAC aprendido segue o cadastro atual; a correcao fica para o recomeco em producao, trocando os IPs pela edicao (o MAC e reaprendido sozinho).
   - Achado no teste com as cameras reais: a camera do Quintal responde ping em 50-110 ms e nao aparecia na varredura com 0,4 s de timeout. O timeout foi aumentado para 1,5 s com espera final de 1 s.
+  - Corrigido em 2026-09-24 (noite): a conferencia so rodava na hora de iniciar a gravacao. Com o HD desconectado, a Garagem (.4 -> .6) e o Quintal (.2 -> .4) mudaram de IP e o cadastro nao foi atualizado, entao o ao vivo da "Garagem" mostrava o Quintal. Agora `conferir_cameras_paradas()` roda a cada 30 s para toda camera que nao esta gravando, antes da checagem do HD. Testado com as cameras reais e HD inexistente: os dois IPs foram corrigidos sem iniciar gravacao.
   - Pendente, separado nos itens 28 (cadastro escolhendo a camera numa lista, sem digitar IP) e 29 (descoberta ONVIF para Android/Termux).
 
 - [x] 3. Verificar corretamente o caminho de gravacao.

@@ -188,7 +188,8 @@ Quando falta energia ou o roteador reinicia, as cameras podem receber IPs difere
 
 - No cadastro e na edicao, o MAC e preenchido sozinho a partir da tabela ARP depois do teste da camera. O usuario nao precisa digitar.
 - Cameras antigas sem MAC aprendem o MAC automaticamente na primeira vez que estiverem gravando.
-- Antes de iniciar cada gravacao, `captura.py` confere se o IP salvo ainda pertence ao MAC da camera. Se nao pertencer, procura o MAC na tabela ARP e, se preciso, varre a rede local (/24 do ultimo IP, porta RTSP, cerca de 7 segundos). Achando, atualiza IP e URL RTSP em `cameras.local.json` e registra "Camera mudou de endereco (... -> ...) e foi reconectada automaticamente".
+- Antes de iniciar cada gravacao, `captura.py` confere se o IP salvo ainda pertence ao MAC da camera. Se nao pertencer, procura o MAC na tabela ARP e, se preciso, varre a rede local (/24 do ultimo IP, porta RTSP, cerca de 7 segundos). Achando, atualiza IP e URL RTSP em `cameras.local.json` e registra "Camera mudou de endereco (... -> ...) e o sistema atualizou sozinho".
+- A conferencia roda para toda camera que nao esta gravando a cada 30 segundos, antes da checagem do HD. Assim, mesmo com o HD desconectado e a gravacao parada, o cadastro acompanha a troca de IP e o ao vivo do painel nunca mostra a camera errada.
 - A cada ciclo de 10 segundos, a captura tambem confere se o IP de uma camera que esta gravando passou a ser de outro aparelho. Se passou, reinicia a camera, que e procurada de novo.
 - Camera nao encontrada aparece no painel como "Camera nao encontrada na rede". O sistema continua tentando a cada 30 segundos e varre a rede no maximo a cada 5 minutos por camera.
 - Ao mudar o IP de uma camera pela edicao, o MAC antigo e descartado e aprendido de novo no IP novo. Sem isso, a captura "corrigiria" o IP de volta.
