@@ -77,6 +77,90 @@ class ServidorCalendarioTest(unittest.TestCase):
         self.assertIn('/api/camera/entrada/calendario', html)
 
 
+class ListaGravacoesTest(unittest.TestCase):
+    def criar(self, pasta, nome, tamanho, inicio_segundos_atras=None, modificado_atras=0):
+        caminho = os.path.join(pasta, nome)
+        with open(caminho, "wb") as arquivo:
+            arquivo.write(b"x" * tamanho)
+        modificado = time.time() - modificado_atras
+        os.utime(caminho, (modificado, modificado))
+        return caminho
+
+    def nome_em(self, slug, epoch):
+        return f"{slug}_{time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime(epoch))}.mp4"
+
+    def test_duracao_vem_do_nome_e_da_modificacao_sem_ffprobe(self):
+        agora = time.time()
+        with tempfile.TemporaryDirectory() as pasta:
+            nome = self.nome_em("garagem", agora - 3600)
+            self.criar(pasta, nome, 200 * 1024, modificado_atras=3600 - 900)
+            with mock.patch.object(servidor.subprocess, "run", side_effect=AssertionError("nao deve chamar ffprobe")):
+                info = servidor.obter_info_video(pasta, nome, "garagem", agora=agora)
+
+        self.assertEqual(info["duracao"], "15:00")
+        self.assertTrue(info["reproduzivel"])
+        self.assertFalse(info["em_gravacao"])
+
+    def test_segmento_atual_aparece_como_gravando(self):
+        agora = time.time()
+        with tempfile.TemporaryDirectory() as pasta:
+            nome = self.nome_em("garagem", agora - 20)
+            self.criar(pasta, nome, 1024)
+            info = servidor.obter_info_video(pasta, nome, "garagem", agora=agora)
+        self.assertTrue(info["em_gravacao"])
+        self.assertTrue(info["reproduzivel"])
+
+    def test_so_o_segmento_mais_novo_aparece_gravando(self):
+        agora = time.time()
+        with tempfile.TemporaryDirectory() as pasta:
+            anterior = self.nome_em("garagem", agora - 930)
+            atual = self.nome_em("garagem", agora - 30)
+            if anterior[:18] != atual[:18]:
+                self.skipTest("os dois segmentos cairam em dias diferentes (perto da meia-noite)")
+            self.criar(pasta, anterior, 200 * 1024, modificado_atras=30)
+            self.criar(pasta, atual, 200 * 1024)
+            _data, videos = servidor.listar_videos_camera(pasta, "garagem")
+        self.assertEqual([(v["nome"], v["em_gravacao"]) for v in videos], [(atual, True), (anterior, False)])
+
+    def test_arquivo_minusculo_antigo_e_invalido(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            self.criar(pasta, "garagem_2026-09-01_10-00-00.mp4", 1024, modificado_atras=3600)
+            info = servidor.obter_info_video(pasta, "garagem_2026-09-01_10-00-00.mp4", "garagem")
+        self.assertFalse(info["reproduzivel"])
+
+    def test_sem_data_abre_o_dia_mais_recente(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            for nome in (
+                "garagem_2026-09-22_10-00-00.mp4",
+                "garagem_2026-09-23_09-00-00.mp4",
+                "garagem_2026-09-23_09-15-00.mp4",
+                "garagem_fundos_2026-09-24_10-00-00.mp4",
+            ):
+                self.criar(pasta, nome, 100 * 1024, modificado_atras=3600)
+
+            data, videos = servidor.listar_videos_camera(pasta, "garagem")
+            self.assertEqual(data, "2026-09-23")
+            self.assertEqual([v["nome"] for v in videos], [
+                "garagem_2026-09-23_09-15-00.mp4",
+                "garagem_2026-09-23_09-00-00.mp4",
+            ])
+
+            data, videos = servidor.listar_videos_camera(pasta, "garagem", "2026-09-22")
+            self.assertEqual((data, len(videos)), ("2026-09-22", 1))
+
+    def test_api_informa_o_dia_usado(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            self.criar(pasta, "entrada_2026-09-23_09-00-00.mp4", 100 * 1024, modificado_atras=3600)
+            cameras = [{"nome": "Entrada", "slug": "entrada", "rtsp_url": "rtsp://a:b@192.168.0.10:554/onvif1"}]
+            with (
+                mock.patch.object(servidor, "carregar_cameras", return_value=cameras),
+                mock.patch.object(servidor, "get_caminho_videos", return_value=pasta),
+            ):
+                dados = servidor.app.test_client().get("/api/camera/entrada/videos").get_json()
+        self.assertEqual(dados["data"], "2026-09-23")
+        self.assertEqual(dados["total_videos"], 1)
+
+
 class StatusGravacaoTest(unittest.TestCase):
     AGORA = 1_000_000
 

@@ -100,7 +100,7 @@ O painel principal mostra as cameras cadastradas, o status online/offline e a qu
 
 Na tela da camera, a lista `Gravacoes` mostra os arquivos encontrados no armazenamento ativo. O calendario destaca dias com gravacoes, mostra a quantidade de videos por dia e permite clicar em uma data para filtrar a lista. O filtro manual por data continua disponivel como fallback. Ao abrir uma gravacao, o painel interrompe o stream ao vivo, mostra o player de video e usa uma rota compativel com navegador (`/video_compativel/<arquivo>`) para converter o trecho sob demanda para WebM quando necessario. O download continua entregando o arquivo `.mp4` original.
 
-Arquivos antigos ou interrompidos antes desta versao podem aparecer como incompletos se nao puderem ser lidos pelo `ffprobe`.
+Arquivos com menos de 64 KB que nao estao sendo gravados aparecem como incompletos na lista.
 
 ## Gravacoes curtas e queda de energia
 

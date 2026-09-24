@@ -153,7 +153,7 @@
             <p class="info-note" id="recording-detail" hidden></p>
         </div>
         <div class="info-card">
-            <h5>GRAVAÇÕES ENCONTRADAS</h5>
+            <h5>GRAVAÇÕES DO DIA</h5>
             <span class="video-total" id="video-total">--</span>
         </div>
     </div>
@@ -340,7 +340,15 @@
     }
 
     function criarMetaVideo(video) {
-        return video.duracao ? `${video.duracao} · ${video.tamanho}` : video.tamanho;
+        const partes = [];
+        if (video.em_gravacao) {
+            partes.push('Gravando agora');
+        }
+        if (video.duracao) {
+            partes.push(video.duracao);
+        }
+        partes.push(video.tamanho);
+        return partes.join(' · ');
     }
 
     function criarDataLocal(valor) {
@@ -604,6 +612,12 @@
             }
 
             const dados = await resposta.json();
+            if (!videoDateInput.value && dados.data) {
+                // Sem data escolhida, o servidor devolve o dia mais recente com gravacao.
+                videoDateInput.value = dados.data;
+                sincronizarMesComFiltro();
+                renderizarCalendario();
+            }
             videoTotal.textContent = `${dados.videos_validos} / ${dados.total_videos}`;
             renderizarVideos(dados.videos || []);
         } catch (_erro) {

@@ -47,7 +47,12 @@ except ArmazenamentoIndisponivel as erro:
 print(f"Sistema rodando! Gravando em: {get_caminho_videos()}")
 
 MAC_REGEX = re.compile(r"^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$")
-VIDEO_INFO_CACHE = {}
+# Abaixo disso o segmento nao chegou a ter video (ex.: FFmpeg caiu ao abrir o arquivo).
+TAMANHO_MINIMO_VIDEO = 64 * 1024
+# Segmento modificado ha menos que isso ainda esta sendo gravado.
+IDADE_SEGMENTO_EM_GRAVACAO = 60
+# Duracao estimada acima disso indica relogio ajustado; nao e exibida.
+DURACAO_MAXIMA_EXIBIDA = 3600
 IDADE_MINIMA_EXCLUSAO_VIDEO = 60
 # captura.py regrava o estado pelo menos a cada 60 s; sem atualizar alem disso, ela parou.
 ESTADO_CAPTURA_VALIDADE = 180
@@ -214,73 +219,76 @@ def formatar_duracao(segundos):
     return f"{minutos:02d}:{segundos:02d}"
 
 
-def obter_info_video(caminho_videos, nome_arquivo):
+def inicio_video(nome_arquivo, slug_fixo):
+    """Horario de inicio do segmento (epoch), lido do nome do arquivo."""
+    if not extrair_data_video(nome_arquivo, slug_fixo):
+        return None
+    carimbo = nome_arquivo[len(slug_fixo) + 1:-len(".mp4")]
+    try:
+        return time.mktime(time.strptime(carimbo, "%Y-%m-%d_%H-%M-%S"))
+    except (ValueError, OverflowError):
+        return None
+
+
+def obter_info_video(caminho_videos, nome_arquivo, slug_fixo, agora=None, pode_estar_gravando=True):
+    """Dados do video para a lista, sem abrir o arquivo.
+
+    Nao usa ffprobe: no Orange Pi ele levava ~4 s por segmento e a lista de um
+    dia demorava minutos. A duracao e estimada pelo inicio (nome do arquivo) e
+    pela ultima modificacao. Se o navegador nao tocar o MP4, o player cai para
+    /video_compativel sozinho.
+    """
+    agora = time.time() if agora is None else agora
     caminho = os.path.join(caminho_videos, nome_arquivo)
     try:
-        tamanho = os.path.getsize(caminho)
-        modificado = os.path.getmtime(caminho)
+        estado = os.stat(caminho)
+        tamanho, modificado = estado.st_size, estado.st_mtime
     except OSError:
-        tamanho = 0
-        modificado = 0
+        tamanho, modificado = 0, 0
 
-    cache_key = (caminho, tamanho, modificado)
-    info_cache = VIDEO_INFO_CACHE.get(cache_key)
-    if info_cache:
-        return dict(info_cache)
+    duracao = ""
+    inicio = inicio_video(nome_arquivo, slug_fixo)
+    if inicio is not None and 0 <= modificado - inicio <= DURACAO_MAXIMA_EXIBIDA:
+        duracao = formatar_duracao(modificado - inicio)
 
-    info = {
+    # Sem limite inferior: o arquivo pode ser escrito depois de "agora" durante a listagem.
+    em_gravacao = pode_estar_gravando and agora - modificado < IDADE_SEGMENTO_EM_GRAVACAO
+    return {
         "nome": nome_arquivo,
         "tamanho": formatar_tamanho(tamanho),
-        "duracao": "",
-        "reproduzivel": False,
+        "duracao": duracao,
+        "reproduzivel": em_gravacao or tamanho >= TAMANHO_MINIMO_VIDEO,
+        "em_gravacao": em_gravacao,
     }
-
-    try:
-        resultado = subprocess.run(
-            [
-                "ffprobe",
-                "-v", "error",
-                "-show_entries", "format=duration",
-                "-of", "default=nw=1:nk=1",
-                caminho,
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            timeout=4,
-            check=False,
-        )
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return info
-
-    duracao = resultado.stdout.strip()
-    if resultado.returncode == 0 and duracao and duracao != "N/A":
-        try:
-            info["duracao"] = formatar_duracao(duracao)
-            info["reproduzivel"] = True
-        except ValueError:
-            pass
-
-    if len(VIDEO_INFO_CACHE) > 1000:
-        VIDEO_INFO_CACHE.clear()
-    VIDEO_INFO_CACHE[cache_key] = dict(info)
-    return info
 
 
 def listar_videos_camera(caminho_videos, slug_fixo, data_filtro=""):
+    """Retorna (data, videos) de um dia. Sem data, usa o dia mais recente com gravacao."""
+    datas_por_nome = {}
     try:
-        nomes = [
-            f for f in os.listdir(caminho_videos)
-            if nome_video_pertence_camera(f, slug_fixo)
-        ]
+        with os.scandir(caminho_videos) as itens:
+            for item in itens:
+                data_video = extrair_data_video(item.name, slug_fixo)
+                if data_video:
+                    datas_por_nome[item.name] = data_video
     except OSError:
-        return []
+        return data_filtro, []
 
-    if data_filtro:
-        nomes = [f for f in nomes if extrair_data_video(f, slug_fixo) == data_filtro]
+    if not data_filtro:
+        data_filtro = max(datas_por_nome.values(), default="")
 
-    nomes.sort(reverse=True)
-    return [obter_info_video(caminho_videos, nome) for nome in nomes]
+    nomes = sorted(
+        (nome for nome, data_video in datas_por_nome.items() if data_video == data_filtro),
+        reverse=True,
+    )
+    # So o segmento mais novo da camera pode estar em gravacao; o anterior fica
+    # recente por alguns segundos depois da virada de segmento.
+    mais_recente = max(datas_por_nome, default="")
+    agora = time.time()
+    return data_filtro, [
+        obter_info_video(caminho_videos, nome, slug_fixo, agora, pode_estar_gravando=nome == mais_recente)
+        for nome in nomes
+    ]
 
 
 def listar_dias_gravacoes_camera(caminho_videos, slug_fixo):
@@ -330,12 +338,6 @@ def video_pode_ser_excluido(caminho_video):
         return False
 
 
-def limpar_cache_video(caminho_video):
-    for chave in list(VIDEO_INFO_CACHE):
-        if chave[0] == caminho_video:
-            VIDEO_INFO_CACHE.pop(chave, None)
-
-
 def apagar_video_camera(slug_fixo, nome_arquivo):
     if not nome_video_pertence_camera(nome_arquivo, slug_fixo):
         return False, "Video nao pertence a esta camera."
@@ -348,7 +350,6 @@ def apagar_video_camera(slug_fixo, nome_arquivo):
 
     try:
         os.remove(caminho_video)
-        limpar_cache_video(caminho_video)
         return True, None
     except OSError:
         return False, "Nao foi possivel apagar o video."
@@ -374,7 +375,6 @@ def apagar_todos_videos_camera(slug_fixo):
             continue
         try:
             os.remove(caminho_video)
-            limpar_cache_video(caminho_video)
             apagados += 1
         except OSError:
             ignorados += 1
@@ -799,9 +799,10 @@ def api_camera_videos(slug):
 
     data_filtro = request.args.get('data', '')
     caminho_videos = get_caminho_videos()
-    videos = listar_videos_camera(caminho_videos, slug_camera(camera), data_filtro)
+    data_filtro, videos = listar_videos_camera(caminho_videos, slug_camera(camera), data_filtro)
     videos_validos = sum(1 for video in videos if video["reproduzivel"])
     return jsonify({
+        "data": data_filtro,
         "videos": videos,
         "videos_validos": videos_validos,
         "total_videos": len(videos),

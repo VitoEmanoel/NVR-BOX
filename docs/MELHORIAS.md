@@ -59,18 +59,6 @@ Observacao: o painel mostra as cameras como "online" porque a porta RTSP respond
 
 Problemas que causam perda de gravacao, perda de dados ou deixam o painel inutilizavel.
 
-- [ ] 5. Deixar a lista de gravacoes rapida.
-  - Sintoma relatado: os videos ja gravados demoram a aparecer no painel da camera.
-  - Causa (**comprovado**): a tela da camera carrega por padrao a lista **sem filtro de data**, ou seja, todo o historico. Para cada arquivo roda um `ffprobe` em sequencia. Com 1500 videos a resposta levou 85 s.
-  - Causa (**comprovado**): o cache `VIDEO_INFO_CACHE` e zerado quando passa de 1000 itens. Com mais de 1000 videos ele se apaga durante a propria listagem e nunca ajuda: a segunda chamada tambem levou 85 s.
-  - O cache fica so em memoria e se perde a cada reinicio do servidor.
-  - Abrir a tela ja filtrada no dia mais recente com gravacao (o calendario ja sabe quais dias existem).
-  - Paginar a lista (ex.: 50 por pagina).
-  - Nao rodar `ffprobe` na listagem: usar nome, tamanho e data do arquivo; validar apenas ao abrir o video ou em segundo plano.
-  - Segmentos fechados podem ter duracao estimada pelo tempo de segmento; so o ultimo segmento de cada camera precisa de verificacao especial.
-  - Se o cache continuar, usar limite com remocao dos mais antigos (LRU) em vez de apagar tudo, e opcionalmente persistir em disco.
-  - Substitui a antiga tarefa "Validar gravacoes sem deixar o painel pesado".
-
 - [ ] 6. Impedir que a limpeza apague arquivos que nao sao do NVR.
   - `limpeza.py` apaga qualquer `.mp4` com mais de 15 minutos na pasta ativa. Como o painel aceita qualquer pasta como armazenamento, apontar para `~/Videos` pode apagar videos pessoais.
   - Limitar a limpeza a arquivos no padrao `<slug>_AAAA-MM-DD_HH-MM-SS.mp4`.
@@ -176,7 +164,7 @@ Problemas que causam perda de gravacao, perda de dados ou deixam o painel inutil
 - [ ] 24. Melhorar lista de gravacoes.
   - Ordenacao por data/hora.
   - Manter botoes de player, download e apagar.
-  - Paginacao e duracao entram no item 5.
+  - Duracao e lista por dia feitas no item 5; paginacao nao foi necessaria.
 
 - [ ] 25. Adicionar backup e restauracao.
   - Exportar cameras.
@@ -222,7 +210,7 @@ Problemas que causam perda de gravacao, perda de dados ou deixam o painel inutil
 
 1. ~~Gravacao travada e estado de gravacao (itens 1, 2 e 8)~~: concluido em 2026-09-24.
 2. ~~Caminho de gravacao e identificacao da camera por MAC (itens 3 e 4)~~: concluido em 2026-09-24.
-3. Lista de gravacoes rapida (item 5).
+3. ~~Lista de gravacoes rapida (item 5)~~: concluido em 2026-09-24.
 4. Seguranca dos dados (itens 6 e 7).
 5. Correcoes rapidas (itens 9, 12 e 13).
 6. Desempenho em hardware fraco (itens 10 e 11).
@@ -241,6 +229,20 @@ Decisao do usuario (2026-09-24): nao corrigir nem renomear o historico atual. De
 - [ ] Acompanhar os primeiros dias: nenhuma camera parada, logs pequenos, lista de gravacoes abrindo rapido.
 
 ## Concluidas
+
+- [x] 5. Deixar a lista de gravacoes rapida.
+  - Sintoma relatado: os videos ja gravados demoram a aparecer no painel da camera.
+  - Causa (**comprovado**): a tela da camera carrega por padrao a lista **sem filtro de data**, ou seja, todo o historico. Para cada arquivo roda um `ffprobe` em sequencia. Com 1500 videos a resposta levou 85 s.
+  - Causa (**comprovado**): o cache `VIDEO_INFO_CACHE` e zerado quando passa de 1000 itens. Com mais de 1000 videos ele se apaga durante a propria listagem e nunca ajuda: a segunda chamada tambem levou 85 s.
+  - O cache fica so em memoria e se perde a cada reinicio do servidor.
+  - Abrir a tela ja filtrada no dia mais recente com gravacao (o calendario ja sabe quais dias existem).
+  - Paginar a lista (ex.: 50 por pagina).
+  - Nao rodar `ffprobe` na listagem: usar nome, tamanho e data do arquivo; validar apenas ao abrir o video ou em segundo plano.
+  - Segmentos fechados podem ter duracao estimada pelo tempo de segmento; so o ultimo segmento de cada camera precisa de verificacao especial.
+  - Se o cache continuar, usar limite com remocao dos mais antigos (LRU) em vez de apagar tudo, e opcionalmente persistir em disco.
+  - Substitui a antiga tarefa "Validar gravacoes sem deixar o painel pesado".
+  - Feito em 2026-09-24: a listagem nao usa mais `ffprobe` nem cache; duracao estimada pelo inicio no nome e pela modificacao; tela abre no dia mais recente (a API devolve o dia usado e o calendario acompanha); segmento mais novo aparece como "Gravando agora"; arquivos < 64 KB fora de gravacao aparecem como invalidos. Com 3000 arquivos no PC, um dia com 144 videos caiu de 11,1 s para 0,01 s.
+  - Paginacao nao foi necessaria: com a lista por dia, o maximo e 288 videos (segmentos de 5 min) e a resposta continua instantanea.
 
 - [x] 4. Encontrar a camera sozinho quando o IP mudar (identificar pelo MAC, nao pelo IP).
   - Sintoma relatado: quando falta energia ou o Wi-Fi reinicia, o roteador distribui os IPs de novo e as cameras podem trocar de IP entre si (ex.: camera 1 fica com o IP que era da camera 2 e vice-versa). O sistema continua usando o IP salvo, entao a gravacao da camera 2 vai para o nome da camera 1, e a pagina da camera 1 mostra a imagem da camera 2. Se o IP novo nao for de nenhuma camera cadastrada, a camera some.

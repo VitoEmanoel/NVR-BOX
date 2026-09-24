@@ -19,7 +19,7 @@ O uso previsto e local: `localhost`, rede local confiavel ou Tailscale. O painel
 - O caminho de gravacoes e resolvido por `encontrar_armazenamento()`: primeiro `NVRBOX_GRAVACOES`, depois a escolha salva em `sistema.json`, depois HD externo gravavel em caminhos Linux/Android conhecidos, e por fim `gravacoes/` local.
 - A escolha de armazenamento e feita no painel por `/configurar_armazenamento` e nao deve ser versionada.
 - Novas gravacoes usam MP4 fragmentado com `frag_keyframe`, `empty_moov` e `default_base_moof`, para preservar reproducao de segmentos interrompidos antes dos 10 minutos.
-- A tela de detalhe valida gravacoes com `ffprobe`; somente arquivos reproduziveis viram botao de play/download.
+- A lista de gravacoes da tela de detalhe mostra um dia por vez e nao abre os arquivos: nao volte a usar `ffprobe` por arquivo na listagem (no Orange Pi eram ~4 s por segmento). Duracao vem do nome e da data de modificacao.
 - A reproducao no painel usa `/video_compativel/<arquivo>`, que entrega WebM gerado sob demanda por FFmpeg. O download continua usando o `.mp4` original.
 - `captura.py` vigia cada gravacao: reinicia o FFmpeg se ele encerrar ou se o segmento parar de crescer, e salva o estado de cada camera em `.run/estado_captura.json`, que o painel usa para mostrar `Gravando`, `Conectando...` ou `Sem gravar ha X`.
 - `iniciar_nvr.sh`: script manual para subir limpeza, captura e painel.
@@ -39,7 +39,7 @@ O uso previsto e local: `localhost`, rede local confiavel ou Tailscale. O painel
 4. Para cada camera, o script inicia um processo `ffmpeg`.
 5. O FFmpeg grava segmentos de video fragmentados na pasta de gravacoes escolhida.
 6. Se o armazenamento escolhido mudar ou se RTSP/protocolo de uma camera mudar, `captura.py` reinicia os FFmpeg afetados.
-7. `servidor.py` lista gravacoes, valida reproducao com `ffprobe` e separa arquivos incompletos.
+7. `servidor.py` lista as gravacoes de um dia (o mais recente por padrao), estimando duracao pelo nome e pela modificacao e separando arquivos muito pequenos.
 8. Ao clicar em uma gravacao, o front-end interrompe o live view e abre o player com `/video_compativel/<arquivo>`.
 9. `limpeza.py` acompanha o armazenamento ativo e remove videos antigos quando necessario.
 

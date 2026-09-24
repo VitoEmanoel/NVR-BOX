@@ -27,7 +27,7 @@ As principais entregas atuais sao:
 - Historico de gravacoes por camera.
 - Calendario interativo por camera com contador de gravacoes por dia.
 - Filtro de gravacoes por data.
-- Validacao de gravacoes com `ffprobe`.
+- Lista de gravacoes por dia, sem abrir os arquivos, com duracao estimada e indicacao do segmento em gravacao.
 - Separacao visual entre gravacoes reproduziveis e arquivos incompletos ou invalidos.
 - Reproducao de gravacoes no painel.
 - Rota compativel com navegador para gerar WebM sob demanda quando necessario.
@@ -198,7 +198,15 @@ Limitacoes: funciona com o NVR na mesma rede local das cameras. No Android 10+ (
 
 ## Reproducao e download
 
-As gravacoes ficam listadas na tela de detalhe de cada camera. O sistema usa `ffprobe` para verificar duracao e validade do arquivo antes de liberar a reproducao no painel.
+As gravacoes ficam listadas na tela de detalhe de cada camera, um dia por vez. A tela abre no dia mais recente com gravacao; o calendario troca o dia.
+
+A lista nao abre os arquivos. No Orange Pi, um `ffprobe` levava ~4 segundos por segmento e a lista de um dia demorava minutos; agora ela sai em milissegundos:
+
+- a duracao e estimada pelo horario de inicio (no nome do arquivo) e pela ultima modificacao do arquivo;
+- o segmento mais novo da camera, modificado no ultimo minuto, aparece como "Gravando agora";
+- arquivos com menos de 64 KB que nao estao gravando aparecem como invalidos.
+
+Se o navegador nao conseguir tocar o `.mp4` original, o player tenta sozinho a rota compativel abaixo.
 
 Ao clicar em `Player`, o painel interrompe o live view da tela, mostra o player de video e carrega uma rota compativel:
 
@@ -301,7 +309,7 @@ O NVRBox usa as seguintes tecnologias:
 - HTML, CSS e JavaScript no painel.
 - Phosphor Icons via CDN para icones da interface.
 - FFmpeg para captura RTSP, segmentacao MP4, live MJPEG e conversao WebM sob demanda.
-- ffprobe para testar streams RTSP e validar gravacoes.
+- ffprobe para testar streams RTSP no cadastro.
 - RTSP como protocolo de video das cameras.
 - MJPEG para live view no navegador.
 - MP4 fragmentado para armazenamento das gravacoes.
