@@ -59,16 +59,6 @@ Observacao: o painel mostra as cameras como "online" porque a porta RTSP respond
 
 Problemas que causam perda de gravacao, perda de dados ou deixam o painel inutilizavel.
 
-- [ ] 3. Verificar corretamente o caminho de gravacao.
-  - Sintoma relatado: o sistema nao verifica direito o caminho de gravacao.
-  - **Comprovado**: se o caminho salvo estiver em uma memoria removida sem permissao (ex.: pendrive em `/run/media/...`), o `servidor.py` nao sobe (`PermissionError` na importacao), o `limpeza.py` morre e o `captura.py` fica vivo sem gravar nada, apenas imprimindo `Erro no Watchdog` a cada 30 s.
-  - **Comprovado**: se o HD externo estiver desmontado mas a pasta pai for gravavel (ex.: `/mnt/hd`), `garantir_diretorios` cria a pasta no disco interno e a gravacao segue no lugar errado, sem aviso, podendo encher o disco do sistema.
-  - `encontrar_armazenamento()` nao testa escrita no caminho salvo ou vindo de ambiente; so testa na deteccao automatica.
-  - A deteccao automatica pega o primeiro disco externo gravavel; ao plugar um pendrive, a gravacao pode mudar de lugar sozinha.
-  - Para caminhos externos, exigir que a base seja um ponto de montagem real (`os.path.ismount`) e nunca criar a pasta se o disco nao estiver montado.
-  - Nao derrubar servidor e limpeza por caminho invalido: iniciar em modo de erro e mostrar o problema no painel.
-  - Validar escrita periodicamente e expor o resultado no estado do item 2.
-
 - [ ] 4. Encontrar a camera sozinho quando o IP mudar (identificar pelo MAC, nao pelo IP).
   - Sintoma relatado: quando falta energia ou o Wi-Fi reinicia, o roteador distribui os IPs de novo e as cameras podem trocar de IP entre si (ex.: camera 1 fica com o IP que era da camera 2 e vice-versa). O sistema continua usando o IP salvo, entao a gravacao da camera 2 vai para o nome da camera 1, e a pagina da camera 1 mostra a imagem da camera 2. Se o IP novo nao for de nenhuma camera cadastrada, a camera some.
   - Causa: o IP fica fixo dentro da `rtsp_url` salva em `cameras.local.json`. O campo `mac` ja existe no cadastro, mas so e validado no formulario; nenhuma parte do sistema usa o MAC para achar ou conferir a camera.
@@ -150,7 +140,7 @@ Problemas que causam perda de gravacao, perda de dados ou deixam o painel inutil
 - [ ] 15. Melhorar confiabilidade do RTSP.
   - Manter UDP/TCP por camera; o padrao atual e UDP, que perde pacotes com facilidade em Wi-Fi.
   - Evidencia (2026-09-24, com o log limpo apos o item 8): nas 3 cameras do Orange Pi aparecem continuamente `RTP: missed N packets`, `Too short data for FU-A H.264 RTP packet` e `max delay reached`, ou seja, perda de pacotes UDP que gera quadros corrompidos na gravacao. Sao cerca de 9 KB de avisos a cada 3,5 minutos por camera. Testar TCP nessas cameras e prioridade dentro deste item.
-  - Recomendar TCP quando houver perda de pacotes.
+  - Recomendar TCP quando houver perda de pacotes. As cameras do equipamento real sao genericas (servidor RTSP `RtspServer_0.0.0.2`), com Wi-Fi e firmware simples; TCP ajuda porque retransmite o que se perde, enquanto UDP simplesmente descarta.
   - Detectar mensagens comuns nos logs do FFmpeg, como perda RTP.
   - Mostrar sugestao clara no painel quando uma camera estiver instavel.
 
@@ -179,6 +169,7 @@ Problemas que causam perda de gravacao, perda de dados ou deixam o painel inutil
   - Detectar `$HOME/storage/shared` quando existir.
   - Detectar `/storage/emulated/0` e caminhos equivalentes.
   - Adicionar botao ou acao de testar escrita.
+  - Sem caminho salvo, fixar o primeiro disco detectado em `sistema.json` para a gravacao nao mudar de lugar ao plugar outro pendrive (restante do item 3).
 
 - [ ] 20. Ampliar os testes automatizados.
   - Hoje os testes do servidor cobrem apenas o calendario.
@@ -234,7 +225,7 @@ Problemas que causam perda de gravacao, perda de dados ou deixam o painel inutil
 ## Ordem recomendada de execucao
 
 1. ~~Gravacao travada e estado de gravacao (itens 1, 2 e 8)~~: concluido em 2026-09-24.
-2. Caminho de gravacao e identificacao da camera por MAC (itens 3 e 4): evitam gravar no lugar errado.
+2. Caminho de gravacao (item 3, concluido) e identificacao da camera por MAC (item 4): evitam gravar no lugar errado.
 3. Lista de gravacoes rapida (item 5).
 4. Seguranca dos dados (itens 6 e 7).
 5. Correcoes rapidas (itens 9, 12 e 13).
@@ -254,6 +245,18 @@ Decisao do usuario (2026-09-24): nao corrigir nem renomear o historico atual. De
 - [ ] Acompanhar os primeiros dias: nenhuma camera parada, logs pequenos, lista de gravacoes abrindo rapido.
 
 ## Concluidas
+
+- [x] 3. Verificar corretamente o caminho de gravacao.
+  - Sintoma relatado: o sistema nao verifica direito o caminho de gravacao.
+  - **Comprovado**: se o caminho salvo estiver em uma memoria removida sem permissao (ex.: pendrive em `/run/media/...`), o `servidor.py` nao sobe (`PermissionError` na importacao), o `limpeza.py` morre e o `captura.py` fica vivo sem gravar nada, apenas imprimindo `Erro no Watchdog` a cada 30 s.
+  - **Comprovado**: se o HD externo estiver desmontado mas a pasta pai for gravavel (ex.: `/mnt/hd`), `garantir_diretorios` cria a pasta no disco interno e a gravacao segue no lugar errado, sem aviso, podendo encher o disco do sistema.
+  - `encontrar_armazenamento()` nao testa escrita no caminho salvo ou vindo de ambiente; so testa na deteccao automatica.
+  - A deteccao automatica pega o primeiro disco externo gravavel; ao plugar um pendrive, a gravacao pode mudar de lugar sozinha.
+  - Para caminhos externos, exigir que a base seja um ponto de montagem real (`os.path.ismount`) e nunca criar a pasta se o disco nao estiver montado.
+  - Nao derrubar servidor e limpeza por caminho invalido: iniciar em modo de erro e mostrar o problema no painel.
+  - Validar escrita periodicamente e expor o resultado no estado do item 2.
+  - Feito em 2026-09-24: `verificar_armazenamento()` exige que discos em `/media`, `/mnt`, `/storage` e `/run/media` estejam montados dentro da raiz (evita o falso positivo do `/run` ser tmpfs) e nunca cria a pasta com o disco ausente; `garantir_diretorios()` levanta `ArmazenamentoIndisponivel` com mensagem para o usuario; servidor e limpeza nao caem mais; captura para os FFmpeg, registra o motivo uma vez e retoma sozinha; painel mostra "Nao e possivel gravar". Escolher pelo painel um HD desconectado e recusado.
+  - Pendente (movido para o item 19): a deteccao automatica sem caminho salvo ainda pega o primeiro disco externo encontrado, entao plugar um pendrive pode mudar o destino quando nada foi escolhido no painel.
 
 - [x] 1. Detectar gravacao travada e reiniciar a captura.
   - Sintoma relatado: as gravacoes param sem motivo aparente.

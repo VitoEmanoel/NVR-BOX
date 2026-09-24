@@ -10,6 +10,7 @@ from secrets import compare_digest
 from urllib.parse import unquote, urlparse
 
 from config import (
+    ArmazenamentoIndisponivel,
     AUTH_ATIVA,
     AUTH_SENHA,
     AUTH_USUARIO,
@@ -38,7 +39,10 @@ from config import (
 
 app = Flask(__name__)
 
-garantir_diretorios()
+try:
+    garantir_diretorios()
+except ArmazenamentoIndisponivel as erro:
+    print(f"[!] {erro}", flush=True)
 print(f"Sistema rodando! Gravando em: {get_caminho_videos()}")
 
 MAC_REGEX = re.compile(r"^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$")
@@ -161,6 +165,10 @@ def resumo_gravacao(slug, estado_captura, agora=None):
         return {"codigo": "gravando", "texto": "Gravando", "detalhe": ""}
 
     ultima = info.get("ultima_gravacao")
+    erro_geral = estado_captura.get("erro")
+    if erro_geral:
+        texto = f"Sem gravar ha {formatar_tempo_decorrido(agora - ultima)}" if ultima else "Sem gravar"
+        return {"codigo": "parada", "texto": texto, "detalhe": erro_geral}
     if ultima and agora - ultima > LIMITE_GRAVACAO_PARADA:
         return {
             "codigo": "parada",
@@ -611,7 +619,11 @@ def gerar_frames(camera):
 
 def montar_contexto_index():
     caminho_videos = get_caminho_videos()
-    garantir_diretorios(caminho_videos)
+    try:
+        garantir_diretorios(caminho_videos)
+        erro_armazenamento = None
+    except ArmazenamentoIndisponivel as erro:
+        erro_armazenamento = str(erro)
     cameras = carregar_cameras()
     estado_captura = carregar_estado_captura()
     total_cams = len(cameras)
@@ -645,6 +657,7 @@ def montar_contexto_index():
         "cameras": cameras,
         "captura_ativa": captura_ativa(estado_captura),
         "erro_captura": (estado_captura or {}).get("erro"),
+        "erro_armazenamento": erro_armazenamento,
         "total_cams": total_cams,
         "online_count": online_count,
         "disco": disco,
@@ -898,7 +911,6 @@ def configurar_armazenamento():
     ok, erro = definir_armazenamento(caminho)
     if not ok:
         return renderizar_index(mensagem_erro=erro, status=400)
-    garantir_diretorios(get_caminho_videos())
     return redirect(url_for('index', sucesso="Armazenamento atualizado."))
 
 

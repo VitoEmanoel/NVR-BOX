@@ -223,6 +223,15 @@ O sistema procura memorias em caminhos comuns de Linux, TV Box e Android:
 
 Antes de usar uma pasta, o sistema testa permissao de escrita criando e removendo um arquivo temporario.
 
+Em memorias externas (dentro de `/media`, `/mnt`, `/storage` ou `/run/media`), o disco precisa estar montado dentro dessa raiz. Se o HD estiver desconectado, o sistema nao cria a pasta (o que faria a gravacao ir para o disco do sistema sem aviso) e trata o armazenamento como indisponivel:
+
+- o painel continua abrindo e mostra "Nao e possivel gravar" com o motivo;
+- `captura.py` para os FFmpeg, registra o motivo uma vez e volta sozinha quando o HD reaparece;
+- `limpeza.py` suspende a limpeza ate o HD voltar;
+- a camera aparece como "Sem gravar" com o motivo na tela de detalhe.
+
+Um caminho salvo que ficou indisponivel nao e trocado automaticamente por outro: o sistema avisa em vez de gravar em outro lugar. A captura confere a montagem a cada ciclo e testa escrita a cada 60 segundos.
+
 ## Limpeza automatica
 
 O processo `limpeza.py` acompanha o uso do armazenamento ativo. O limite padrao e 90% de uso do disco, definido por `NVRBOX_LIMITE_DISCO`.

@@ -153,6 +153,23 @@ class StatusGravacaoTest(unittest.TestCase):
         self.assertNotIn("Nenhuma câmera está gravando.", html)
         self.assertIn("rec-gravando", html)
 
+    def test_painel_avisa_hd_desconectado_sem_quebrar(self):
+        erro = servidor.ArmazenamentoIndisponivel("O HD externo nao esta conectado (/mnt/hd/gravacoes).")
+        with mock.patch.object(servidor, "garantir_diretorios", side_effect=erro):
+            resposta = self.get("/", None)
+        html = resposta.get_data(as_text=True)
+        self.assertEqual(resposta.status_code, 200)
+        self.assertIn("Não é possível gravar.", html)
+        self.assertIn("O HD externo nao esta conectado", html)
+
+    def test_erro_geral_da_captura_aparece_na_camera(self):
+        estado = self.estado(estado="reconectando", ultima_gravacao=self.AGORA - 600)
+        estado["erro"] = "O HD externo nao esta conectado (/mnt/hd/gravacoes). Conecte o HD para voltar a gravar."
+        resumo = servidor.resumo_gravacao("garagem", estado, agora=self.AGORA)
+        self.assertEqual(resumo["codigo"], "parada")
+        self.assertEqual(resumo["texto"], "Sem gravar ha 10 min")
+        self.assertIn("Conecte o HD", resumo["detalhe"])
+
     def test_api_status_inclui_gravacao(self):
         dados = self.get("/api/camera/garagem/status", None).get_json()
         self.assertTrue(dados["online"])

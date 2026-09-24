@@ -82,5 +82,76 @@ class EstadoCapturaTest(unittest.TestCase):
                 self.assertEqual(config.carregar_estado_captura(), {"ativo": True, "cameras": {}})
 
 
+class ArmazenamentoTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.base = os.path.realpath(self.tmp.name)
+        self.raiz = os.path.join(self.base, "mnt")
+        self.hd = os.path.join(self.raiz, "hd_externo")
+        os.makedirs(self.hd)
+        self.gravacoes = os.path.join(self.hd, "gravacoes")
+        self.patch_raiz = mock.patch.object(config, "RAIZES_ARMAZENAMENTO_EXTERNO", (self.raiz,))
+        self.patch_raiz.start()
+
+    def tearDown(self):
+        self.patch_raiz.stop()
+        self.tmp.cleanup()
+
+    def montados(self, *caminhos):
+        original = os.path.ismount
+        return mock.patch.object(
+            config.os.path, "ismount", side_effect=lambda c: c in caminhos or original(c)
+        )
+
+    def test_hd_desmontado_nao_cria_pasta_no_disco_do_sistema(self):
+        ok, erro = config.verificar_armazenamento(self.gravacoes)
+
+        self.assertFalse(ok)
+        self.assertIn("HD externo nao esta conectado", erro)
+        self.assertFalse(os.path.exists(self.gravacoes))
+
+    def test_hd_montado_cria_pasta_e_grava(self):
+        with self.montados(self.hd):
+            ok, erro = config.verificar_armazenamento(self.gravacoes)
+
+        self.assertTrue(ok, erro)
+        self.assertTrue(os.path.isdir(self.gravacoes))
+        self.assertEqual(os.listdir(self.gravacoes), [])
+
+    def test_montagem_acima_da_raiz_nao_conta(self):
+        # Em /run/media/usuario/PENDRIVE, o /run e um tmpfs montado: nao prova que o pendrive esta ali.
+        with self.montados(self.base):
+            ok, _erro = config.verificar_armazenamento(self.gravacoes)
+        self.assertFalse(ok)
+
+    def test_caminho_fora_das_raizes_externas_nao_exige_montagem(self):
+        interno = os.path.join(self.base, "projeto", "gravacoes")
+        self.assertEqual(config.verificar_armazenamento(interno), (True, None))
+
+    def test_garantir_diretorios_levanta_erro_legivel(self):
+        with self.assertRaises(config.ArmazenamentoIndisponivel) as contexto:
+            config.garantir_diretorios(self.gravacoes)
+        self.assertIn("Conecte o HD", str(contexto.exception))
+
+    def test_nao_permite_escolher_hd_desconectado_no_painel(self):
+        arquivo_config = os.path.join(self.base, "sistema.json")
+        with mock.patch.object(config, "ARQUIVO_CONFIGURACOES", arquivo_config):
+            ok, erro = config.definir_armazenamento(self.gravacoes)
+            self.assertFalse(ok)
+            self.assertIn("HD externo nao esta conectado", erro)
+            self.assertFalse(os.path.exists(arquivo_config))
+
+    def test_caminho_salvo_invalido_nao_troca_para_outro_lugar(self):
+        arquivo_config = os.path.join(self.base, "sistema.json")
+        with open(arquivo_config, "w", encoding="utf-8") as arquivo:
+            arquivo.write('{"caminho_videos": "%s"}' % self.gravacoes)
+        with (
+            mock.patch.object(config, "ARQUIVO_CONFIGURACOES", arquivo_config),
+            mock.patch.dict(os.environ, {}, clear=False),
+        ):
+            os.environ.pop("NVRBOX_GRAVACOES", None)
+            self.assertEqual(config.get_caminho_videos(), self.gravacoes)
+
+
 if __name__ == "__main__":
     unittest.main()

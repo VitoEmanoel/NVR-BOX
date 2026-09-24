@@ -19,7 +19,12 @@
         <a href="{{ url_for('monitor_cameras') }}" class="btn-monitor"><i class="ph ph-squares-four"></i> Ver todas</a>
     </header>
 
-    {% if cameras and not captura_ativa %}
+    {% if erro_armazenamento %}
+    <div class="alert alert-error alert-captura">
+        <i class="ph ph-hard-drive"></i>
+        <span><strong>Não é possível gravar.</strong> {{ erro_armazenamento }}</span>
+    </div>
+    {% elif cameras and not captura_ativa %}
     <div class="alert alert-error alert-captura">
         <i class="ph ph-warning-octagon"></i>
         <span><strong>Nenhuma câmera está gravando.</strong> O motor de gravação não está rodando. Reinicie o NVRBox.</span>

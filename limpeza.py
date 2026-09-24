@@ -2,7 +2,12 @@ import os
 import shutil
 import time
 
-from config import LIMITE_USO_PORCENTAGEM, get_caminho_videos, garantir_diretorios
+from config import (
+    ArmazenamentoIndisponivel,
+    LIMITE_USO_PORCENTAGEM,
+    get_caminho_videos,
+    garantir_diretorios,
+)
 
 IDADE_MINIMA_PARA_LIMPEZA = 15 * 60
 INTERVALO_VERIFICACAO = 300
@@ -89,7 +94,11 @@ def executar_limpeza(pasta_videos, limite_porcentagem=LIMITE_USO_PORCENTAGEM, ob
 
 def ciclo_limpeza():
     pasta_videos = get_caminho_videos()
-    garantir_diretorios(pasta_videos)
+    try:
+        garantir_diretorios(pasta_videos, testar_escrita=False)
+    except ArmazenamentoIndisponivel as erro:
+        print(f"[Limpeza] {erro} Limpeza suspensa.", flush=True)
+        return
     porcentagem, usado_gb, total_gb = obter_uso_detalhado(pasta_videos)
     print(f" Status do HD: {usado_gb:.2f} GB usados de {total_gb:.2f} GB ({porcentagem:.1f}%)", flush=True)
     if porcentagem > LIMITE_USO_PORCENTAGEM:

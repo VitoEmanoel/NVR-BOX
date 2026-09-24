@@ -114,16 +114,55 @@ def _candidatos_armazenamento_externo():
                     yield subcaminho
 
 
-def _pode_gravar_em(caminho_gravacoes):
+class ArmazenamentoIndisponivel(OSError):
+    """Pasta de gravacao inutilizavel. A mensagem e escrita para o usuario final."""
+
+
+def _ponto_de_montagem(caminho):
+    atual = caminho
+    while not os.path.exists(atual) and atual != os.sep:
+        atual = os.path.dirname(atual)
+    while not os.path.ismount(atual) and atual != os.sep:
+        atual = os.path.dirname(atual)
+    return atual
+
+
+def _raiz_externa(caminho):
+    for raiz in RAIZES_ARMAZENAMENTO_EXTERNO:
+        if caminho == raiz or caminho.startswith(raiz + os.sep):
+            return raiz
+    return None
+
+
+def verificar_armazenamento(caminho_gravacoes, testar_escrita=True):
+    """Confere se da para gravar no caminho, sem criar pastas em disco desconectado.
+
+    Em memorias externas (/media, /mnt, /storage, /run/media) o disco precisa
+    estar montado dentro da raiz. Sem isso, a pasta seria criada no disco do
+    sistema e a gravacao seguiria no lugar errado sem aviso. Por isso nao basta
+    achar qualquer ponto de montagem: /run, por exemplo, ja e um tmpfs.
+    """
+    caminho = os.path.realpath(normalizar_caminho(caminho_gravacoes))
+    raiz = _raiz_externa(caminho)
+    if raiz and not _ponto_de_montagem(caminho).startswith(raiz + os.sep):
+        return False, f"O HD externo nao esta conectado ({caminho}). Conecte o HD para voltar a gravar."
+
     try:
-        os.makedirs(caminho_gravacoes, exist_ok=True)
-        arquivo_teste = os.path.join(caminho_gravacoes, ".nvrbox_write_test")
-        with open(arquivo_teste, "w", encoding="utf-8") as arquivo:
-            arquivo.write("ok")
-        os.remove(arquivo_teste)
-        return True
-    except OSError:
-        return False
+        os.makedirs(caminho, exist_ok=True)
+        if testar_escrita:
+            arquivo_teste = os.path.join(caminho, ".nvrbox_write_test")
+            with open(arquivo_teste, "w", encoding="utf-8") as arquivo:
+                arquivo.write("ok")
+            os.remove(arquivo_teste)
+    except PermissionError:
+        return False, f"Sem permissao para gravar em {caminho}."
+    except OSError as erro:
+        return False, f"Nao foi possivel gravar em {caminho}: {erro.strerror or erro}."
+    return True, None
+
+
+def _pode_gravar_em(caminho_gravacoes):
+    return verificar_armazenamento(caminho_gravacoes)[0]
 
 
 def _info_disco(caminho):
@@ -177,8 +216,10 @@ def get_caminho_videos():
     return encontrar_armazenamento()
 
 
-def garantir_diretorios(caminho=None):
-    os.makedirs(caminho or get_caminho_videos(), exist_ok=True)
+def garantir_diretorios(caminho=None, testar_escrita=True):
+    ok, erro = verificar_armazenamento(caminho or get_caminho_videos(), testar_escrita)
+    if not ok:
+        raise ArmazenamentoIndisponivel(erro)
 
 
 def listar_armazenamentos():
@@ -220,8 +261,9 @@ def listar_armazenamentos():
 
 def definir_armazenamento(caminho_gravacoes):
     caminho_gravacoes = normalizar_caminho(caminho_gravacoes)
-    if not _pode_gravar_em(caminho_gravacoes):
-        return False, "Nao foi possivel gravar nesse armazenamento."
+    ok, erro = verificar_armazenamento(caminho_gravacoes)
+    if not ok:
+        return False, erro
 
     configuracoes = carregar_configuracoes()
     configuracoes["caminho_videos"] = caminho_gravacoes

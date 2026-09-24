@@ -4,6 +4,7 @@ import os
 import tempfile
 import time
 import unittest
+import unittest.mock
 
 import limpeza
 
@@ -68,6 +69,22 @@ class LimpezaTest(unittest.TestCase):
             self.assertTrue(resultado["sem_elegiveis"])
             self.assertTrue(os.path.exists(recente))
             self.assertTrue(os.path.exists(texto))
+
+
+class LimpezaSemArmazenamentoTest(unittest.TestCase):
+    def test_ciclo_nao_derruba_processo_com_hd_desconectado(self):
+        saida = io.StringIO()
+        erro = limpeza.ArmazenamentoIndisponivel("O HD externo nao esta conectado (/mnt/hd/gravacoes).")
+        with (
+            unittest.mock.patch.object(limpeza, "get_caminho_videos", return_value="/mnt/hd/gravacoes"),
+            unittest.mock.patch.object(limpeza, "garantir_diretorios", side_effect=erro),
+            unittest.mock.patch.object(limpeza, "executar_limpeza") as executar,
+            contextlib.redirect_stdout(saida),
+        ):
+            limpeza.ciclo_limpeza()
+
+        executar.assert_not_called()
+        self.assertIn("Limpeza suspensa", saida.getvalue())
 
 
 if __name__ == "__main__":

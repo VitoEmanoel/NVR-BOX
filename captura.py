@@ -8,6 +8,7 @@ import time
 from datetime import datetime
 
 from config import (
+    ArmazenamentoIndisponivel,
     FFMPEG_LOG_MAX_BYTES,
     RTSP_TRANSPORTE_PADRAO,
     argumentos_timeout_rtsp,
@@ -28,6 +29,8 @@ TOLERANCIA_INICIO = 90
 LIMITE_SEM_GRAVACAO = int(os.environ.get("NVRBOX_LIMITE_SEM_GRAVACAO", "60"))
 # Evita reiniciar em loop uma camera desligada.
 INTERVALO_MINIMO_REINICIO = 30
+# Teste de escrita no armazenamento (cria e apaga um arquivo); a checagem de montagem e a cada ciclo.
+INTERVALO_TESTE_ESCRITA = 60
 # O estado e regravado quando muda e, no maximo, a cada INTERVALO_ESTADO como sinal de vida.
 INTERVALO_ESTADO = 60
 
@@ -275,6 +278,8 @@ if __name__ == '__main__':
     caminho_atual = None
     estado_anterior = None
     ultimo_estado_salvo = float("-inf")
+    ultimo_teste_escrita = float("-inf")
+    ultimo_erro_impresso = None
     print("--- NVRBox: Motor Blindado e Vigiado ---", flush=True)
 
     while True:
@@ -285,7 +290,18 @@ if __name__ == '__main__':
         try:
             novo_caminho = get_caminho_videos()
             tempo_segmento = get_tempo_segmento()
-            garantir_diretorios(novo_caminho)
+            testar_escrita = agora_mono - ultimo_teste_escrita >= INTERVALO_TESTE_ESCRITA
+            try:
+                garantir_diretorios(novo_caminho, testar_escrita=testar_escrita)
+            except ArmazenamentoIndisponivel:
+                # Sem disco, os FFmpeg gravariam no lugar errado ou falhariam: melhor parar.
+                for slug, registro in list(processos.items()):
+                    print(f"[!] Parando captura sem armazenamento: {slug}", flush=True)
+                    encerrar_ffmpeg(processos.pop(slug))
+                ultimo_teste_escrita = float("-inf")
+                raise
+            if testar_escrita:
+                ultimo_teste_escrita = agora_mono
             if caminho_atual != novo_caminho:
                 if caminho_atual is not None:
                     print(f"[!] Armazenamento alterado: {novo_caminho}", flush=True)
@@ -348,7 +364,11 @@ if __name__ == '__main__':
                     rotacionar_log(processos[slug]["log_path"])
         except Exception as e:
             erro_ciclo = str(e)
-            print(f"Erro no Watchdog: {e}", flush=True)
+            if erro_ciclo != ultimo_erro_impresso:
+                print(f"Erro no Watchdog: {e}", flush=True)
+        if erro_ciclo is None and ultimo_erro_impresso is not None:
+            print("[!] Problema resolvido, captura normalizada.", flush=True)
+        ultimo_erro_impresso = erro_ciclo
 
         estado = montar_estado(caminho_atual, lista_cameras, processos, historico, agora_mono, agora, erro_ciclo)
         comparavel = resumo_para_comparar(estado)
