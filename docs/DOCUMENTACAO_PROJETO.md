@@ -278,7 +278,7 @@ O sistema aceita variaveis de ambiente para ajustar comportamento sem alterar co
 - `NVRBOX_TEMPO_SEGMENTO`: duracao alvo de cada segmento em segundos, padrao `600`.
 - `NVRBOX_RTSP_TRANSPORTE`: transporte RTSP padrao, `udp` ou `tcp`, padrao `udp`.
 - `NVRBOX_TESTAR_RTSP_CADASTRO`: liga ou desliga o teste RTSP no cadastro e edicao, padrao `1`.
-- `NVRBOX_TIMEOUT_TESTE_RTSP`: tempo maximo do teste RTSP em segundos, padrao `8`.
+- `NVRBOX_TIMEOUT_TESTE_RTSP`: tempo maximo do teste RTSP em segundos, padrao `20`.
 - `NVRBOX_FFMPEG_LOG_MAX_BYTES`: tamanho maximo do log FFmpeg antes da rotacao, padrao `2097152`.
 - `NVRBOX_TIMEOUT_RTSP`: segundos sem dados da camera ate o FFmpeg desistir da conexao (captura e live view), padrao `15`, maximo `2000`.
 - `NVRBOX_LIMITE_SEM_GRAVACAO`: segundos com o segmento sem crescer ate a captura considerar a gravacao travada e reiniciar, padrao `60`.

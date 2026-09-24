@@ -201,6 +201,9 @@ Problemas que causam perda de gravacao, perda de dados ou deixam o painel inutil
   - Parte restante do item 4. No Android 10+ (Termux) `/proc/net/arp` e bloqueado, entao hoje a camera segue pelo IP salvo sem conferencia.
   - Usar WS-Discovery (multicast UDP `239.255.255.250:3702`) e guardar o identificador unico de cada camera.
 
+- [x] 30. Aumentar o tempo do teste de camera no cadastro.
+  - Feito em 2026-09-24: ao recadastrar as cameras no Orange Pi, a camera do Quintal foi recusada 3 vezes com "Nao foi possivel confirmar o RTSP dentro do tempo limite". O `ffprobe` dessas cameras genericas leva ~5-6 s com o Orange Pi livre e passava de 8 s com as outras gravacoes rodando. O padrao de `NVRBOX_TIMEOUT_TESTE_RTSP` passou de 8 para 20 s.
+
 ## Futuro
 
 - [ ] Avaliar Docker depois da base ficar robusta.

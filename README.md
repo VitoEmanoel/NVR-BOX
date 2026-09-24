@@ -150,7 +150,7 @@ export NVRBOX_TESTAR_RTSP_CADASTRO=0
 - `NVRBOX_TEMPO_SEGMENTO`: duracao de cada segmento em segundos, padrao `600`. Quando definida, tem prioridade sobre a escolha feita no painel.
 - `NVRBOX_RTSP_TRANSPORTE`: transporte padrao `udp` ou `tcp`, padrao `udp`.
 - `NVRBOX_TESTAR_RTSP_CADASTRO`: liga/desliga o teste RTSP no cadastro, padrao `1`.
-- `NVRBOX_TIMEOUT_TESTE_RTSP`: tempo maximo do teste RTSP em segundos, padrao `8`.
+- `NVRBOX_TIMEOUT_TESTE_RTSP`: tempo maximo do teste RTSP em segundos, padrao `20`.
 - `NVRBOX_FFMPEG_LOG_MAX_BYTES`: tamanho maximo de cada log FFmpeg antes da rotacao, padrao `2097152`.
 
 ## Verificacoes
