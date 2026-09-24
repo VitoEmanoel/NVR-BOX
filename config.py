@@ -2,6 +2,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import tempfile
 import unicodedata
 from urllib.parse import quote, urlparse, urlunparse
@@ -14,12 +15,17 @@ ARQUIVO_CAMERAS = os.environ.get(
     os.path.join(DIRETORIO_PROJETO, "cameras.local.json"),
 )
 ARQUIVO_CAMERAS_EXEMPLO = os.path.join(DIRETORIO_PROJETO, "cameras.example.json")
+ARQUIVO_ESTADO_CAPTURA = os.environ.get(
+    "NVRBOX_ESTADO_CAPTURA",
+    os.path.join(DIRETORIO_PROJETO, ".run", "estado_captura.json"),
+)
 RAIZES_ARMAZENAMENTO_EXTERNO = ("/media", "/mnt", "/storage", "/run/media")
 CAMINHOS_ARMAZENAMENTO_FIXOS = ("/sdcard", "/storage/emulated/0", "/storage/self/primary")
 NOMES_IGNORADOS_ARMAZENAMENTO = {"self", "runtime", "tmp", "tmpfs"}
 VALORES_VERDADEIROS = {"1", "true", "yes", "sim", "on"}
 TEMPOS_SEGMENTO_PERMITIDOS = (300, 600, 900)
 TEMPO_SEGMENTO_PADRAO = 600
+DATA_VIDEO_REGEX = re.compile(r"^(\d{4}-\d{2}-\d{2})_\d{2}-\d{2}-\d{2}\.mp4$")
 
 
 def env_bool(nome, padrao=False):
@@ -43,7 +49,7 @@ def carregar_configuracoes():
         return {}
 
 
-def salvar_json_atomico(caminho, dados):
+def salvar_json_atomico(caminho, dados, sincronizar=True):
     diretorio = os.path.dirname(caminho) or "."
     os.makedirs(diretorio, exist_ok=True)
     nome_base = os.path.basename(caminho)
@@ -61,7 +67,8 @@ def salvar_json_atomico(caminho, dados):
             json.dump(dados, arquivo, indent=4, ensure_ascii=False)
             arquivo.write("\n")
             arquivo.flush()
-            os.fsync(arquivo.fileno())
+            if sincronizar:
+                os.fsync(arquivo.fileno())
         os.replace(temporario, caminho)
     finally:
         if temporario and os.path.exists(temporario):
@@ -262,6 +269,7 @@ TEMPO_SEGMENTO = get_tempo_segmento()
 RTSP_TRANSPORTE_PADRAO = os.environ.get("NVRBOX_RTSP_TRANSPORTE", "udp")
 TESTAR_RTSP_CADASTRO = env_bool("NVRBOX_TESTAR_RTSP_CADASTRO", True)
 TIMEOUT_TESTE_RTSP = int(os.environ.get("NVRBOX_TIMEOUT_TESTE_RTSP", "8"))
+TIMEOUT_RTSP_SEGUNDOS = int(os.environ.get("NVRBOX_TIMEOUT_RTSP", "15"))
 FFMPEG_LOG_MAX_BYTES = int(os.environ.get("NVRBOX_FFMPEG_LOG_MAX_BYTES", str(2 * 1024 * 1024)))
 AUTH_USUARIO = os.environ.get("NVRBOX_AUTH_USUARIO", "").strip()
 AUTH_SENHA = os.environ.get("NVRBOX_AUTH_SENHA", "").strip()
@@ -318,6 +326,71 @@ def carregar_cameras():
 
 def salvar_cameras(cameras):
     salvar_json_atomico(ARQUIVO_CAMERAS, cameras)
+
+
+def carregar_estado_captura():
+    try:
+        with open(ARQUIVO_ESTADO_CAPTURA, "r", encoding="utf-8") as arquivo:
+            dados = json.load(arquivo)
+    except (OSError, json.JSONDecodeError):
+        return None
+    return dados if isinstance(dados, dict) else None
+
+
+def salvar_estado_captura(estado):
+    # Estado efemero reescrito com frequencia: sem fsync para poupar cartao SD.
+    salvar_json_atomico(ARQUIVO_ESTADO_CAPTURA, estado, sincronizar=False)
+
+
+def extrair_data_video(nome_arquivo, slug_fixo):
+    prefixo = f"{slug_fixo}_"
+    if not nome_arquivo.startswith(prefixo):
+        return None
+
+    match = DATA_VIDEO_REGEX.match(nome_arquivo[len(prefixo):])
+    if not match:
+        return None
+    return match.group(1)
+
+
+def nome_video_pertence_camera(nome_arquivo, slug_fixo):
+    return extrair_data_video(nome_arquivo, slug_fixo) is not None
+
+
+_OPCAO_TIMEOUT_RTSP = None
+
+
+def opcao_timeout_rtsp():
+    """Nome da opcao de timeout de socket do RTSP no FFmpeg instalado.
+
+    FFmpeg 5+ usa -timeout. Versoes antigas usam -stimeout, e nelas -timeout
+    coloca o RTSP em modo de escuta, entao nao pode ser usado.
+    """
+    global _OPCAO_TIMEOUT_RTSP
+    if _OPCAO_TIMEOUT_RTSP is None:
+        try:
+            ajuda = subprocess.run(
+                ["ffmpeg", "-hide_banner", "-h", "demuxer=rtsp"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=10,
+                check=False,
+            ).stdout
+        except (OSError, subprocess.TimeoutExpired):
+            ajuda = ""
+        _OPCAO_TIMEOUT_RTSP = "-stimeout" if "-stimeout" in ajuda else "-timeout"
+    return _OPCAO_TIMEOUT_RTSP
+
+
+# O FFmpeg guarda o timeout em microssegundos num inteiro de 32 bits (~2147 s).
+TIMEOUT_RTSP_MAXIMO = 2000
+
+
+def argumentos_timeout_rtsp(segundos=None):
+    segundos = TIMEOUT_RTSP_SEGUNDOS if segundos is None else segundos
+    segundos = min(max(1, segundos), TIMEOUT_RTSP_MAXIMO)
+    return [opcao_timeout_rtsp(), str(int(segundos * 1_000_000))]
 
 
 def construir_rtsp_url(ip, senha, usuario="admin", perfil="onvif1", porta=554, caminho_manual=""):

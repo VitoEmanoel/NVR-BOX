@@ -148,6 +148,11 @@
             <span class="status-text" id="camera-state">CARREGANDO...</span>
         </div>
         <div class="info-card">
+            <h5>GRAVAÇÃO</h5>
+            <span class="status-text" id="recording-state">CARREGANDO...</span>
+            <p class="info-note" id="recording-detail" hidden></p>
+        </div>
+        <div class="info-card">
             <h5>GRAVAÇÕES ENCONTRADAS</h5>
             <span class="video-total" id="video-total">--</span>
         </div>
@@ -167,6 +172,8 @@
     const perfilEditar = document.getElementById('perfil-editar');
     const caminhoManualEditar = document.getElementById('caminho-manual-editar');
     const cameraState = document.getElementById('camera-state');
+    const recordingState = document.getElementById('recording-state');
+    const recordingDetail = document.getElementById('recording-detail');
     const videoTotal = document.getElementById('video-total');
     const videoList = document.getElementById('video-list');
     const videoFilterForm = document.getElementById('video-filter-form');
@@ -525,6 +532,16 @@
         reproduzirVideo(videoNome);
     });
 
+    function mostrarGravacao(gravacao) {
+        if (!gravacao) {
+            return;
+        }
+        recordingState.textContent = gravacao.texto.toUpperCase();
+        recordingState.className = `status-text recording-${gravacao.codigo}`;
+        recordingDetail.textContent = gravacao.detalhe || '';
+        recordingDetail.hidden = !gravacao.detalhe;
+    }
+
     async function carregarStatusCamera() {
         try {
             const resposta = await fetch(cameraStatusUrl, { cache: 'no-store' });
@@ -533,6 +550,7 @@
             }
 
             const dados = await resposta.json();
+            mostrarGravacao(dados.gravacao);
             if (dados.online) {
                 cameraState.textContent = 'ONLINE';
                 cameraState.className = 'status-text status-online';
@@ -550,6 +568,8 @@
                 liveFeedOffline.style.display = 'flex';
             }
         } catch (_erro) {
+            recordingState.textContent = 'INDISPONÍVEL';
+            recordingState.className = 'status-text status-offline';
             cameraState.textContent = 'INDISPONÍVEL';
             cameraState.className = 'status-text status-offline';
             liveFeed.dataset.liveSrc = '';

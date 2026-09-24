@@ -18,7 +18,9 @@ from config import (
     TESTAR_RTSP_CADASTRO,
     TEMPOS_SEGMENTO_PERMITIDOS,
     TIMEOUT_TESTE_RTSP,
+    argumentos_timeout_rtsp,
     carregar_cameras,
+    carregar_estado_captura,
     construir_rtsp_url,
     definir_armazenamento,
     definir_tempo_segmento,
@@ -28,6 +30,8 @@ from config import (
     gerar_slug,
     listar_armazenamentos,
     mascarar_rtsp,
+    extrair_data_video,
+    nome_video_pertence_camera,
     salvar_cameras,
     slug_camera,
 )
@@ -38,9 +42,12 @@ garantir_diretorios()
 print(f"Sistema rodando! Gravando em: {get_caminho_videos()}")
 
 MAC_REGEX = re.compile(r"^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$")
-DATA_VIDEO_REGEX = re.compile(r"^(\d{4}-\d{2}-\d{2})_\d{2}-\d{2}-\d{2}\.mp4$")
 VIDEO_INFO_CACHE = {}
 IDADE_MINIMA_EXCLUSAO_VIDEO = 60
+# captura.py regrava o estado pelo menos a cada 60 s; sem atualizar alem disso, ela parou.
+ESTADO_CAPTURA_VALIDADE = 180
+# Sem gravar por mais que isso, a camera aparece como parada no painel.
+LIMITE_GRAVACAO_PARADA = 120
 
 
 @app.before_request
@@ -112,6 +119,58 @@ def verificar_online(url):
         return True
     except OSError:
         return False
+
+def formatar_tempo_decorrido(segundos):
+    segundos = max(0, int(segundos))
+    if segundos < 60:
+        return "menos de 1 min"
+    minutos = segundos // 60
+    if minutos < 60:
+        return f"{minutos} min"
+    horas, minutos = divmod(minutos, 60)
+    if horas < 24:
+        return f"{horas} h {minutos} min" if minutos else f"{horas} h"
+    dias, horas = divmod(horas, 24)
+    return f"{dias} dias {horas} h" if dias > 1 else f"1 dia {horas} h"
+
+
+def captura_ativa(estado_captura, agora=None):
+    agora = time.time() if agora is None else agora
+    if not estado_captura or not estado_captura.get("ativo"):
+        return False
+    atualizado = estado_captura.get("atualizado_em") or 0
+    return agora - atualizado <= ESTADO_CAPTURA_VALIDADE
+
+
+def resumo_gravacao(slug, estado_captura, agora=None):
+    """Situacao da gravacao de uma camera para exibir no painel."""
+    agora = time.time() if agora is None else agora
+    if not captura_ativa(estado_captura, agora):
+        return {
+            "codigo": "captura_parada",
+            "texto": "Motor de gravacao parado",
+            "detalhe": "O processo de captura nao esta rodando. Nenhuma camera esta gravando.",
+        }
+
+    info = (estado_captura.get("cameras") or {}).get(slug)
+    if not info:
+        return {"codigo": "iniciando", "texto": "Aguardando captura", "detalhe": ""}
+
+    detalhe = info.get("ultimo_erro") or info.get("ultimo_motivo") or ""
+    if info.get("estado") == "gravando":
+        return {"codigo": "gravando", "texto": "Gravando", "detalhe": ""}
+
+    ultima = info.get("ultima_gravacao")
+    if ultima and agora - ultima > LIMITE_GRAVACAO_PARADA:
+        return {
+            "codigo": "parada",
+            "texto": f"Sem gravar ha {formatar_tempo_decorrido(agora - ultima)}",
+            "detalhe": detalhe,
+        }
+    if not ultima and info.get("reinicios"):
+        return {"codigo": "parada", "texto": "Sem gravar", "detalhe": detalhe}
+    return {"codigo": "iniciando", "texto": "Conectando...", "detalhe": detalhe}
+
 
 def contar_arquivos(slug_camera):
     try:
@@ -191,21 +250,6 @@ def obter_info_video(caminho_videos, nome_arquivo):
         VIDEO_INFO_CACHE.clear()
     VIDEO_INFO_CACHE[cache_key] = dict(info)
     return info
-
-
-def nome_video_pertence_camera(nome_arquivo, slug_fixo):
-    return extrair_data_video(nome_arquivo, slug_fixo) is not None
-
-
-def extrair_data_video(nome_arquivo, slug_fixo):
-    prefixo = f"{slug_fixo}_"
-    if not nome_arquivo.startswith(prefixo):
-        return None
-
-    match = DATA_VIDEO_REGEX.match(nome_arquivo[len(prefixo):])
-    if not match:
-        return None
-    return match.group(1)
 
 
 def listar_videos_camera(caminho_videos, slug_fixo, data_filtro=""):
@@ -533,7 +577,7 @@ def gerar_frames(camera):
     rtsp_url = camera['rtsp_url']
     transporte = camera.get('protocolo', RTSP_TRANSPORTE_PADRAO)
     comando = [
-        'ffmpeg', '-rtsp_transport', transporte, '-i', rtsp_url,
+        'ffmpeg', '-rtsp_transport', transporte, *argumentos_timeout_rtsp(), '-i', rtsp_url,
         '-f', 'image2pipe', '-vcodec', 'mjpeg', '-q', '5',
         '-vf', 'scale=640:-1', '-'
     ]
@@ -569,6 +613,7 @@ def montar_contexto_index():
     caminho_videos = get_caminho_videos()
     garantir_diretorios(caminho_videos)
     cameras = carregar_cameras()
+    estado_captura = carregar_estado_captura()
     total_cams = len(cameras)
     online_count = 0
     for camera in cameras:
@@ -578,6 +623,7 @@ def montar_contexto_index():
             online_count += 1
         slug_fixo = slug_camera(camera)
         camera['slug'] = slug_fixo
+        camera['gravacao'] = resumo_gravacao(slug_fixo, estado_captura)
         try:
             videos = [f for f in os.listdir(caminho_videos) if f.startswith(slug_fixo) and f.endswith('.mp4')]
             camera['qtd_videos'] = len(videos)
@@ -597,6 +643,8 @@ def montar_contexto_index():
 
     return {
         "cameras": cameras,
+        "captura_ativa": captura_ativa(estado_captura),
+        "erro_captura": (estado_captura or {}).get("erro"),
         "total_cams": total_cams,
         "online_count": online_count,
         "disco": disco,
@@ -694,6 +742,7 @@ def api_camera_status(slug):
     online = verificar_online(camera['rtsp_url'])
     return jsonify({
         "online": online,
+        "gravacao": resumo_gravacao(slug_camera(camera), carregar_estado_captura()),
         "live_url": url_for('live_stream', slug=slug_camera(camera)),
     })
 

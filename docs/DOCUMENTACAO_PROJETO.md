@@ -143,6 +143,8 @@ Por padrao, cada segmento tem duracao alvo de 600 segundos, ou 10 minutos. O pai
 O FFmpeg usa:
 
 - `-rtsp_transport` com `udp` ou `tcp`;
+- timeout de rede (`-timeout`, ou `-stimeout` em FFmpeg antigo), para desistir de uma camera que para de enviar dados;
+- `-nostats -loglevel warning`, para registrar so avisos e erros;
 - copia do video com `-c:v copy`;
 - audio em AAC com `-c:a aac`;
 - formato segmentado;
@@ -154,6 +156,31 @@ Os logs de erro do FFmpeg ficam no mesmo armazenamento das gravacoes com nome ba
 ```text
 erro_camera_slug.txt
 ```
+
+O log e aberto em modo de acrescimo, com uma linha `=== data hora Iniciando captura ===` a cada inicio, entao o erro que derrubou a gravacao anterior fica preservado. Quando passa de `NVRBOX_FFMPEG_LOG_MAX_BYTES`, o conteudo e copiado para `erro_camera_slug.txt.1` e o original e zerado, mesmo com o FFmpeg rodando.
+
+### Vigia da gravacao
+
+A cada 10 segundos, `captura.py` confere se o segmento que cada FFmpeg esta escrevendo continua crescendo. O arquivo aberto e lido em `/proc/<pid>/fd`; sem `/proc`, usa o segmento mais recente da camera pelo nome.
+
+- Se o FFmpeg encerrar, ele e reiniciado, respeitando um intervalo minimo de 30 segundos entre tentativas.
+- Se o arquivo ficar sem crescer por `NVRBOX_LIMITE_SEM_GRAVACAO` segundos (padrao 60), a gravacao e considerada travada e o FFmpeg e reiniciado, mesmo com o processo vivo e a conexao aberta.
+- Se nenhum video for gravado em 90 segundos apos iniciar, o FFmpeg tambem e reiniciado.
+
+A comparacao usa relogio monotonico, entao ajustes de horario (comuns em placas sem RTC apos queda de energia) nao disparam reinicios falsos.
+
+### Estado da gravacao no painel
+
+`captura.py` salva o estado de cada camera em `.run/estado_captura.json` (ou `NVRBOX_ESTADO_CAPTURA`): gravando, conectando ou parada, horario da ultima gravacao, numero de reinicios, ultimo motivo e ultima linha do log (com senha mascarada). O arquivo e regravado quando algo muda e, no maximo, a cada 60 segundos, sem `fsync`, para poupar cartao SD.
+
+O painel inicial e a tela da camera leem esse arquivo:
+
+- `Gravando`: o segmento cresceu recentemente.
+- `Conectando...`: a captura esta tentando conectar ou reconectar.
+- `Sem gravar ha X`: nada gravado ha mais de 2 minutos; a tela da camera mostra o ultimo erro.
+- `Motor de gravacao parado`: o arquivo nao existe, esta desatualizado ha mais de 3 minutos ou a captura foi encerrada. O painel inicial mostra um aviso geral de que nenhuma camera esta gravando.
+
+O status "online" continua sendo apenas o teste da porta RTSP e nao indica que a camera esta gravando.
 
 ## Reproducao e download
 
@@ -230,6 +257,9 @@ O sistema aceita variaveis de ambiente para ajustar comportamento sem alterar co
 - `NVRBOX_TESTAR_RTSP_CADASTRO`: liga ou desliga o teste RTSP no cadastro e edicao, padrao `1`.
 - `NVRBOX_TIMEOUT_TESTE_RTSP`: tempo maximo do teste RTSP em segundos, padrao `8`.
 - `NVRBOX_FFMPEG_LOG_MAX_BYTES`: tamanho maximo do log FFmpeg antes da rotacao, padrao `2097152`.
+- `NVRBOX_TIMEOUT_RTSP`: segundos sem dados da camera ate o FFmpeg desistir da conexao (captura e live view), padrao `15`, maximo `2000`.
+- `NVRBOX_LIMITE_SEM_GRAVACAO`: segundos com o segmento sem crescer ate a captura considerar a gravacao travada e reiniciar, padrao `60`.
+- `NVRBOX_ESTADO_CAPTURA`: caminho do arquivo de estado da captura, padrao `.run/estado_captura.json`.
 
 Exemplo de autenticacao HTTP basica:
 

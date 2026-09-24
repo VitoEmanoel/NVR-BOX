@@ -376,6 +376,43 @@ body {
     gap: 15px;
 }
 
+.alert-captura {
+    align-items: center;
+    display: flex;
+    gap: 10px;
+}
+
+.alert-captura i {
+    font-size: 1.4rem;
+}
+
+.rec-status {
+    align-items: center;
+    border-radius: 6px;
+    display: flex;
+    font-size: 0.85rem;
+    font-weight: 600;
+    gap: 6px;
+    margin-bottom: 12px;
+    padding: 6px 10px;
+}
+
+.rec-gravando {
+    background: rgba(16, 185, 129, 0.12);
+    color: var(--success);
+}
+
+.rec-iniciando {
+    background: rgba(247, 170, 73, 0.12);
+    color: var(--accent);
+}
+
+.rec-parada,
+.rec-captura_parada {
+    background: rgba(239, 68, 68, 0.12);
+    color: var(--danger);
+}
+
 .cam-actions {
     display: flex;
     gap: 8px;

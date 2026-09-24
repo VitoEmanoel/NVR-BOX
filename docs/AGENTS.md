@@ -20,6 +20,7 @@ O uso previsto e local: `localhost`, rede local confiavel ou Tailscale. O painel
 - Novas gravacoes usam MP4 fragmentado com `frag_keyframe`, `empty_moov` e `default_base_moof`, para preservar reproducao de segmentos interrompidos antes dos 10 minutos.
 - A tela de detalhe valida gravacoes com `ffprobe`; somente arquivos reproduziveis viram botao de play/download.
 - A reproducao no painel usa `/video_compativel/<arquivo>`, que entrega WebM gerado sob demanda por FFmpeg. O download continua usando o `.mp4` original.
+- `captura.py` vigia cada gravacao: reinicia o FFmpeg se ele encerrar ou se o segmento parar de crescer, e salva o estado de cada camera em `.run/estado_captura.json`, que o painel usa para mostrar `Gravando`, `Conectando...` ou `Sem gravar ha X`.
 - `iniciar_nvr.sh`: script manual para subir limpeza, captura e painel.
 - `cameras.local.json`: configuracao persistida das cameras, ignorada pelo Git por conter credenciais.
 - `cameras.example.json`: modelo versionado sem credenciais reais.
@@ -59,6 +60,7 @@ O uso previsto e local: `localhost`, rede local confiavel ou Tailscale. O painel
 - Nao exponha URL RTSP completa na interface, pois ela pode conter usuario e senha.
 - Rotas que alteram estado devem usar `POST`.
 - Evite `except:` generico; capture excecoes especificas sempre que possivel.
+- Ao mexer na captura, mantenha o timeout RTSP (`argumentos_timeout_rtsp()`) e a deteccao de segmento parado. Sem eles, um FFmpeg travado fica vivo sem gravar e ninguem percebe (ja aconteceu em producao por ~5 dias).
 - Ao mexer na captura, preserve a gravacao fragmentada. Sem isso, uma queda de energia antes do fechamento do segmento pode deixar o `.mp4` antigo sem indice final e sem reproducao no navegador.
 - Ao mexer na reproducao de gravacoes, preserve a rota `/video_compativel/<arquivo>` ou ofereca alternativa equivalente. Alguns `.mp4` baixam e abrem em player externo, mas nao tocam diretamente no `<video>` do navegador.
 

@@ -1,4 +1,9 @@
+import os
+import subprocess
+import sys
+import tempfile
 import unittest
+from unittest import mock
 
 import captura
 
@@ -18,6 +23,156 @@ class CapturaTest(unittest.TestCase):
             assinatura_5_min,
             ("rtsp://admin:senha@192.168.0.10:554/onvif1", "tcp", 300),
         )
+
+
+class DeteccaoTravamentoTest(unittest.TestCase):
+    def test_sem_progresso_respeita_tolerancia_de_inicio(self):
+        registro = {"inicio_mono": 1000}
+
+        self.assertFalse(captura.gravacao_travada(registro, 1080, limite=60, tolerancia=90))
+        self.assertTrue(captura.gravacao_travada(registro, 1091, limite=60, tolerancia=90))
+
+    def test_arquivo_parado_alem_do_limite_e_travamento(self):
+        registro = {"inicio_mono": 1000, "ultimo_progresso_mono": 2000}
+
+        self.assertFalse(captura.gravacao_travada(registro, 2060, limite=60, tolerancia=90))
+        self.assertTrue(captura.gravacao_travada(registro, 2061, limite=60, tolerancia=90))
+
+    def test_progresso_so_conta_quando_arquivo_muda(self):
+        registro = {"inicio_mono": 0, "medida": ("/v/a.mp4", 100)}
+
+        self.assertFalse(captura.atualizar_progresso(registro, ("/v/a.mp4", 100), 50, 5000))
+        self.assertIsNone(registro.get("ultimo_progresso_mono"))
+        self.assertFalse(captura.atualizar_progresso(registro, None, 50, 5000))
+
+        self.assertTrue(captura.atualizar_progresso(registro, ("/v/a.mp4", 200), 60, 5010))
+        self.assertEqual(registro["ultimo_progresso_mono"], 60)
+        self.assertEqual(registro["ultimo_progresso"], 5010)
+
+        self.assertTrue(captura.atualizar_progresso(registro, ("/v/b.mp4", 10), 70, 5020))
+
+    def test_estado_camera(self):
+        self.assertEqual(captura.estado_camera(None, 100), "reconectando")
+        self.assertEqual(captura.estado_camera({"inicio_mono": 0}, 100), "iniciando")
+        self.assertEqual(captura.estado_camera({"ultimo_progresso_mono": 90}, 100), "gravando")
+        self.assertEqual(
+            captura.estado_camera({"ultimo_progresso_mono": 0}, captura.LIMITE_SEM_GRAVACAO + 1),
+            "parada",
+        )
+
+
+class SegmentosTest(unittest.TestCase):
+    def criar(self, pasta, nome):
+        with open(os.path.join(pasta, nome), "wb") as arquivo:
+            arquivo.write(b"x")
+
+    def test_ultimo_segmento_ignora_camera_com_prefixo_parecido(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            self.criar(pasta, "sala_2026-09-01_10-00-00.mp4")
+            self.criar(pasta, "sala_2026-09-01_10-10-00.mp4")
+            self.criar(pasta, "sala_2_2026-09-02_10-00-00.mp4")
+            self.criar(pasta, "sala_2026-09-03_10-00-00.txt")
+
+            self.assertEqual(
+                captura.ultimo_segmento_camera(pasta, "sala"),
+                os.path.join(pasta, "sala_2026-09-01_10-10-00.mp4"),
+            )
+            self.assertEqual(
+                captura.ultimo_segmento_camera(pasta, "sala_2"),
+                os.path.join(pasta, "sala_2_2026-09-02_10-00-00.mp4"),
+            )
+            self.assertIsNone(captura.ultimo_segmento_camera(pasta, "garagem"))
+
+    @unittest.skipUnless(os.path.isdir("/proc/self/fd"), "requer /proc")
+    def test_arquivo_aberto_pelo_processo_via_proc(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            destino = os.path.join(pasta, "cam_2026-09-01_10-00-00.mp4")
+            processo = subprocess.Popen([
+                sys.executable, "-c",
+                "import sys, time; f = open(sys.argv[1], 'wb'); print('ok', flush=True); time.sleep(30)",
+                destino,
+            ], stdout=subprocess.PIPE, text=True)
+            try:
+                processo.stdout.readline()
+                self.assertEqual(
+                    os.path.realpath(captura.arquivo_aberto_pelo_processo(processo.pid)),
+                    os.path.realpath(destino),
+                )
+            finally:
+                processo.kill()
+                processo.wait()
+                processo.stdout.close()
+
+
+class LogTest(unittest.TestCase):
+    def test_rotacao_com_arquivo_aberto_em_acrescimo(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = os.path.join(pasta, "erro_cam.txt")
+            with open(caminho, "a", encoding="utf-8") as log:
+                log.write("a" * 50)
+                log.flush()
+                with mock.patch.object(captura, "FFMPEG_LOG_MAX_BYTES", 10):
+                    captura.rotacionar_log(caminho)
+                log.write("depois")
+                log.flush()
+
+            with open(caminho, encoding="utf-8") as arquivo:
+                self.assertEqual(arquivo.read(), "depois")
+            with open(f"{caminho}.1", encoding="utf-8") as arquivo:
+                self.assertEqual(arquivo.read(), "a" * 50)
+
+    def test_ultima_linha_log_mascara_senha(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = os.path.join(pasta, "erro_cam.txt")
+            with open(caminho, "w", encoding="utf-8") as arquivo:
+                arquivo.write("=== 2026-09-24 10:00:00 Iniciando captura ===\n")
+                arquivo.write("[in#0] rtsp://admin:segredo@192.168.0.2:554/onvif1: Connection timed out\n\n")
+
+            linha = captura.ultima_linha_log(caminho)
+
+        self.assertNotIn("segredo", linha)
+        self.assertIn("rtsp://****@192.168.0.2:554/onvif1", linha)
+        self.assertIn("Connection timed out", linha)
+
+    def test_ffmpeg_sem_progresso_no_log_e_com_timeout(self):
+        camera = {
+            "nome": "Garagem",
+            "slug": "garagem",
+            "rtsp_url": "rtsp://admin:senha@192.168.0.4:554/onvif1",
+            "protocolo": "udp",
+        }
+        with tempfile.TemporaryDirectory() as pasta:
+            with (
+                mock.patch.object(captura.subprocess, "Popen") as popen,
+                mock.patch.object(captura, "argumentos_timeout_rtsp", return_value=["-timeout", "15000000"]),
+            ):
+                registro = captura.iniciar_ffmpeg(camera, pasta, 900)
+                registro["log"].close()
+
+            comando = popen.call_args.args[0]
+            self.assertIn("-nostats", comando)
+            self.assertEqual(comando[comando.index("-loglevel") + 1], "warning")
+            self.assertLess(comando.index("-timeout"), comando.index("-i"))
+            self.assertEqual(registro["log"].mode, "a")
+            with open(os.path.join(pasta, "erro_garagem.txt"), encoding="utf-8") as arquivo:
+                self.assertIn("Iniciando captura", arquivo.read())
+
+
+class EstadoTest(unittest.TestCase):
+    def test_resumo_nao_muda_so_por_horario(self):
+        estado = {
+            "caminho_videos": "/v",
+            "erro": None,
+            "cameras": {
+                "garagem": {"estado": "gravando", "reinicios": 0, "ultimo_motivo": None, "ultima_gravacao": 1},
+            },
+        }
+        outro = {**estado, "atualizado_em": 99}
+        outro["cameras"] = {"garagem": {**estado["cameras"]["garagem"], "ultima_gravacao": 2}}
+        self.assertEqual(captura.resumo_para_comparar(estado), captura.resumo_para_comparar(outro))
+
+        outro["cameras"]["garagem"]["estado"] = "parada"
+        self.assertNotEqual(captura.resumo_para_comparar(estado), captura.resumo_para_comparar(outro))
 
 
 if __name__ == "__main__":

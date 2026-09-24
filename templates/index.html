@@ -19,6 +19,18 @@
         <a href="{{ url_for('monitor_cameras') }}" class="btn-monitor"><i class="ph ph-squares-four"></i> Ver todas</a>
     </header>
 
+    {% if cameras and not captura_ativa %}
+    <div class="alert alert-error alert-captura">
+        <i class="ph ph-warning-octagon"></i>
+        <span><strong>Nenhuma câmera está gravando.</strong> O motor de gravação não está rodando. Reinicie o NVRBox.</span>
+    </div>
+    {% elif erro_captura %}
+    <div class="alert alert-error alert-captura">
+        <i class="ph ph-warning-octagon"></i>
+        <span><strong>Problema na gravação:</strong> {{ erro_captura }}</span>
+    </div>
+    {% endif %}
+
     <div class="stats-grid">
         <div class="stat-card">
             <i class="ph ph-hard-drive stat-icon"></i>
@@ -138,6 +150,9 @@
                 <div class="cam-meta">
                     <span><i class="ph ph-files"></i> {{ cam.qtd_videos }} vídeos</span>
                     <span><i class="ph ph-broadcast"></i> {% if cam.online %}RTSP ativo{% else %}Sem resposta{% endif %}</span>
+                </div>
+                <div class="rec-status rec-{{ cam.gravacao.codigo }}" {% if cam.gravacao.detalhe %}title="{{ cam.gravacao.detalhe }}"{% endif %}>
+                    <i class="ph-fill ph-record"></i> {{ cam.gravacao.texto }}
                 </div>
                 <div class="cam-actions">
                     <a href="{{ url_for('detalhe_camera', slug=cam.slug) }}" class="btn-view">Abrir Câmera</a>

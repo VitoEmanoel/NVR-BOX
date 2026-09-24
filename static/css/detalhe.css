@@ -609,7 +609,7 @@ button.video-click-area:focus-visible {
 
 .info-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 15px;
 }
 
@@ -642,6 +642,19 @@ button.video-click-area:focus-visible {
 }
 
 .status-offline {
+    color: var(--danger);
+}
+
+.recording-gravando {
+    color: var(--success);
+}
+
+.recording-iniciando {
+    color: var(--accent);
+}
+
+.recording-parada,
+.recording-captura_parada {
     color: var(--danger);
 }
 
